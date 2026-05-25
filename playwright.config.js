@@ -36,7 +36,7 @@ module.exports = defineConfig({
 
   // Run local web server during browser E2E test runs
   webServer: {
-    command: 'python3 -m http.server 8080',
+    command: 'npx http-server -p 8080 -c-1',
     url: 'http://localhost:8080',
     reuseExistingServer: true,
     timeout: 8000

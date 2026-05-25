@@ -118,4 +118,136 @@ test.describe('WikiFlow Web App Tests', () => {
     await page.click('#sidebarCollapseAllBtn');
     await expect(guidesChildren).toBeHidden();
   });
+
+  test('should support searching and filtering pages', async ({ page }) => {
+    await page.click('#demoWorkspaceBtn');
+
+    // Type "highlights" into search box
+    await page.fill('#searchInput', 'highlights');
+
+    // Verify "Welcome" page link is visible and "Tutorial" is not
+    await expect(page.locator('.file-item:has-text("Welcome")')).toBeVisible();
+    await expect(page.locator('.file-item:has-text("Tutorial")')).toBeHidden();
+
+    // Clear search box
+    await page.fill('#searchInput', '');
+
+    // Verify both page links are visible again
+    await expect(page.locator('.file-item:has-text("Tutorial")')).toBeVisible();
+    await expect(page.locator('.file-item:has-text("Welcome")')).toBeVisible();
+  });
+
+  test('should support tags and tag filtering', async ({ page }) => {
+    await page.click('#demoWorkspaceBtn');
+
+    // Verify tags are listed in the sidebar
+    await expect(page.locator('.tag-item:has-text("markdown")')).toBeVisible();
+    await expect(page.locator('.tag-item:has-text("welcome")')).toBeVisible();
+
+    // Click the "#markdown" tag in the sidebar
+    await page.click('.tag-item:has-text("markdown")');
+
+    // Verify tag filter active indicator appears
+    await expect(page.locator('#activeTagFilterIndicator')).toBeVisible();
+    await expect(page.locator('#activeTagFilterName')).toHaveText('#markdown');
+
+    // Verify file tree shows only Tutorial page, and Welcome page is hidden
+    await expect(page.locator('.file-item:has-text("Tutorial")')).toBeVisible();
+    await expect(page.locator('.file-item:has-text("Welcome")')).toBeHidden();
+
+    // Click the clear tag filter button
+    await page.click('#clearTagFilterBtn');
+    await expect(page.locator('#activeTagFilterIndicator')).toBeHidden();
+
+    // Verify Welcome page is visible again
+    await expect(page.locator('.file-item:has-text("Welcome")')).toBeVisible();
+
+    // Now click tag pill inside previewContent
+    // First navigate to Welcome
+    await page.click('.file-item:has-text("Welcome")');
+    await page.click('#previewContent .tag-pill:has-text("#guide")');
+
+    // Verify tag filter indicator shows `#guide` and Welcome is visible, but Tutorial is hidden
+    await expect(page.locator('#activeTagFilterName')).toHaveText('#guide');
+    await expect(page.locator('.file-item:has-text("Welcome")')).toBeVisible();
+    await expect(page.locator('.file-item:has-text("Tutorial")')).toBeHidden();
+  });
+
+  test('should support creating a new note from the sidebar', async ({ page }) => {
+    await page.click('#demoWorkspaceBtn');
+
+    // Click Create New Page button in sidebar
+    await page.click('#sidebarNewBtn');
+
+    // Verify dialog opens
+    const modal = page.locator('#newNoteModal');
+    await expect(modal).toBeVisible();
+
+    // Fill in page name
+    await page.fill('#newNoteName', 'New Sandbox Page');
+
+    // Submit form
+    await page.click('#newNoteForm button[type="submit"]');
+
+    // Verify dialog closes
+    await expect(modal).toBeHidden();
+
+    // Verify active note title updates
+    await expect(page.locator('#activeNoteTitle')).toHaveText('New Sandbox Page');
+
+    // Verify editor text has default template
+    const textarea = page.locator('#editorTextarea');
+    await expect(textarea).toHaveValue(/# New Sandbox Page/);
+
+    // Verify it is listed in the sidebar
+    await expect(page.locator('.file-item:has-text("New Sandbox Page")')).toBeVisible();
+  });
+
+  test('should support creating a new note by clicking a broken wiki link', async ({ page }) => {
+    await page.click('#demoWorkspaceBtn');
+
+    // Set up a listener for the confirm dialog and accept it
+    page.once('dialog', async dialog => {
+      expect(dialog.message()).toContain('The page "Create Me" does not exist');
+      await dialog.accept();
+    });
+
+    // Click broken link "Create Me" in Welcome preview
+    await page.click('#previewContent a[data-page="Create Me"]');
+
+    // Verify that we transitioned to "Create Me" page
+    await expect(page.locator('#activeNoteTitle')).toHaveText('Create Me');
+
+    // Verify it was created and is visible in the file list
+    await expect(page.locator('.file-item:has-text("Create Me")')).toBeVisible();
+  });
+
+  test('should support keyboard shortcuts', async ({ page }) => {
+    await page.click('#demoWorkspaceBtn');
+
+    // Alt+L cycles layouts
+    const panels = page.locator('#workspacePanels');
+
+    await page.keyboard.press('Alt+l');
+    await expect(panels).toHaveClass(/preview-only/);
+
+    await page.keyboard.press('Alt+l');
+    await expect(panels).toHaveClass(/edit-only/);
+
+    await page.keyboard.press('Alt+l');
+    await expect(panels).toHaveClass(/split-only/);
+
+    // Theme toggle via Control+i (or Cmd+i)
+    const html = page.locator('html');
+    const initialTheme = await html.getAttribute('data-theme');
+    
+    // We send Control+i since our handler accepts e.metaKey || e.ctrlKey
+    await page.keyboard.press('Control+i');
+    const expectedTheme = initialTheme === 'dark' ? 'light' : 'dark';
+    await expect(html).toHaveAttribute('data-theme', expectedTheme);
+
+    // Search focus shortcut: Control+f (or Cmd+f)
+    await page.keyboard.press('Control+f');
+    await expect(page.locator('#searchInput')).toBeFocused();
+  });
 });

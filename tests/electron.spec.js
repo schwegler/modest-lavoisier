@@ -62,4 +62,105 @@ test.describe('WikiFlow Electron Desktop Tests', () => {
     // 4. Verify preview render updates cased headers
     await expect(page.locator('#previewContent h1')).toHaveText('Edited Desktop Page');
   });
+
+  test('should support selecting and restoring directory workspace in Electron', async () => {
+    // We add an init script to mock showDirectoryPicker and IndexedDB storage
+    await page.addInitScript(() => {
+      class MockDirectoryHandle {
+        constructor(name) {
+          this.kind = 'directory';
+          this.name = name;
+        }
+        async queryPermission() {
+          return 'prompt';
+        }
+        async requestPermission() {
+          return 'granted';
+        }
+        async *values() {
+          // No files in mock directory for this test
+        }
+      }
+
+      window.showDirectoryPicker = async () => {
+        return new MockDirectoryHandle('schwegler-test');
+      };
+
+      const originalGet = IDBObjectStore.prototype.get;
+      IDBObjectStore.prototype.get = function (key) {
+        if (key === 'directoryHandle') {
+          const request = {};
+          setTimeout(() => {
+            request.result = new MockDirectoryHandle('schwegler-test');
+            if (request.onsuccess) request.onsuccess({ target: request });
+          }, 0);
+          return request;
+        }
+        return originalGet.apply(this, arguments);
+      };
+    });
+
+    // Reset hash and reload the page so the init script takes effect
+    await page.evaluate(() => {
+      window.location.hash = '#/';
+    });
+    await page.reload();
+
+    // The app should immediately detect the stored handle and display the restore button
+    const restoreBtn = page.locator('#restoreFolderBtn');
+    await expect(restoreBtn).toBeVisible();
+    await expect(restoreBtn).toContainText('Unlock Workspace (schwegler-test)');
+
+    // Click Unlock Workspace
+    await restoreBtn.click();
+
+    // It should load successfully and transition to appShell
+    await expect(page.locator('#appShell')).toBeVisible();
+    await expect(page.locator('#activeWorkspaceName')).toHaveText('schwegler-test');
+  });
+
+  test('should automatically restore workspace on startup if permission is already granted', async () => {
+    // We add an init script to mock showDirectoryPicker and IndexedDB storage with permission 'granted'
+    await page.addInitScript(() => {
+      class MockDirectoryHandle {
+        constructor(name) {
+          this.kind = 'directory';
+          this.name = name;
+        }
+        async queryPermission() {
+          return 'granted';
+        }
+        async requestPermission() {
+          return 'granted';
+        }
+        async *values() {
+          // No files in mock directory for this test
+        }
+      }
+
+      const originalGet = IDBObjectStore.prototype.get;
+      IDBObjectStore.prototype.get = function (key) {
+        if (key === 'directoryHandle') {
+          const request = {};
+          setTimeout(() => {
+            request.result = new MockDirectoryHandle('schwegler-auto-restore');
+            if (request.onsuccess) request.onsuccess({ target: request });
+          }, 0);
+          return request;
+        }
+        return originalGet.apply(this, arguments);
+      };
+    });
+
+    // Reset hash and reload the page so the init script takes effect
+    await page.evaluate(() => {
+      window.location.hash = '#/';
+    });
+    await page.reload();
+
+    // The app should automatically bypass the welcome screen and load the workspace
+    await expect(page.locator('#appShell')).toBeVisible();
+    await expect(page.locator('#activeWorkspaceName')).toHaveText('schwegler-auto-restore');
+    await expect(page.locator('#restoreFolderBtn')).toBeHidden();
+  });
 });

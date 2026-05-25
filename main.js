@@ -36,18 +36,19 @@ function createWindow() {
     height: 840,
     minWidth: 800,
     minHeight: 600,
+    icon: path.join(__dirname, 'icon-512.png'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true
     },
     title: 'WikiFlow',
-    titleBarStyle: 'hiddenInset', // Embeds macOS traffic lights into the app window header
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default', // Embeds macOS traffic lights only on macOS
     backgroundColor: '#090d16'     // Matching deep dark blue-slate theme
   });
 
   // Load the app using custom protocol
-  mainWindow.loadURL('app://./index.html');
+  mainWindow.loadURL('app://local/index.html');
 
   mainWindow.on('closed', () => {
     mainWindow = null;

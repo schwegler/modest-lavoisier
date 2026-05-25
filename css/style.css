@@ -1130,16 +1130,16 @@ dialog.modal::backdrop {
 }
 
 /* Electron Desktop Window Overrides */
-.electron-window header.main-header {
+.electron-window.electron-mac header.main-header {
   padding-left: 80px; /* Leave space for macOS traffic light control buttons */
   -webkit-app-region: drag;
   user-select: none;
 }
 
-.electron-window header.main-header button,
-.electron-window header.main-header .toolbar-btn-group,
-.electron-window header.main-header input,
-.electron-window header.main-header a,
-.electron-window header.main-header .save-indicator {
+.electron-window.electron-mac header.main-header button,
+.electron-window.electron-mac header.main-header .toolbar-btn-group,
+.electron-window.electron-mac header.main-header input,
+.electron-window.electron-mac header.main-header a,
+.electron-window.electron-mac header.main-header .save-indicator {
   -webkit-app-region: no-drag;
 }

@@ -27,6 +27,12 @@ class WikiFlowApp {
     this.isElectron = navigator.userAgent.toLowerCase().includes('electron');
     if (this.isElectron) {
       document.body.classList.add('electron-window');
+      const isMac = navigator.userAgent.toLowerCase().includes('macintosh') || navigator.userAgent.toLowerCase().includes('mac os x');
+      if (isMac) {
+        document.body.classList.add('electron-mac');
+      } else {
+        document.body.classList.add('electron-non-mac');
+      }
     }
 
     // Graph Visualizer instance
@@ -509,7 +515,7 @@ class WikiFlowApp {
     const demoNotes = [
       {
         name: 'Welcome',
-        content: `---\ntags: [welcome, guide]\n---\n# Welcome to WikiFlow! 🌊\n\nWikiFlow is a premium, client-side note-taking workspace that turns your local directory into a wiki using standard Markdown files. \n\n### Key Highlights\n1. **Local Folder Integration**: Edits write directly to your local drive. No cloud accounts required!\n2. **Wiki Double-Brackets**: Link pages together by writing [[Wiki Links]].\n3. **Connection Graph**: A force-directed dynamic visualizer mapped on the right displays all your linked notes. Drag nodes and click to explore.\n\n### Getting Started\n* Click on [[Wiki Links]] to navigate.\n* Here is an unresolved link: [[Create Me]]. Clicking it will prompt you to create that page instantly!\n* Read the [[Tutorial]] to see formatting rules.\n* Checkout our nested guide: [[Guides/Style Guide]].`
+        content: `---\ntags: [welcome, guide]\n---\n# Welcome to WikiFlow! 🌊\n\nWikiFlow is a premium, client-side note-taking workspace that turns your local directory into a wiki using standard Markdown files. \n\n### Key Highlights\n1. **Local Folder Integration**: Edits write directly to your local drive. No cloud accounts required!\n2. **Wiki Double-Brackets**: Link pages together by writing [[Wiki Links]].\n3. **Connection Graph**: A force-directed dynamic visualizer mapped on the right displays all your linked notes. Drag nodes and click to explore.\n\n### Getting Started\n* Click on [[Wiki Links]] to navigate.\n* Here is an unresolved link: [[Create Me]]. Clicking it will prompt you to create that page instantly!\n* Read the [[Tutorial]] to see formatting rules.\n* Checkout our nested guide: [[Style Guide]].`
       },
       {
         name: 'Tutorial',
