@@ -623,54 +623,61 @@ class WikiFlowApp {
     const activeTag = this.selectedTag ? this.selectedTag.toLowerCase() : null;
     this.dom.fileList.innerHTML = '';
 
-    const matchesFilters = (page) => {
-      if (filter && !page.name.toLowerCase().includes(filter) && !page.content.toLowerCase().includes(filter)) {
-        return false;
-      }
-      if (activeTag) {
-        const pageTags = (page.tags || []).map(t => t.toLowerCase());
-        if (!pageTags.includes(activeTag)) {
-          return false;
-        }
-      }
-      return true;
-    };
-
     if (filter) {
-      // Flat filter list
-      const list = Array.from(this.pages.values()).sort((a, b) => a.name.localeCompare(b.name));
-      for (const page of list) {
-        if (!matchesFilters(page)) {
-          continue;
-        }
-
-        const li = document.createElement('li');
-        const isActive = this.activePage && page.name.toLowerCase() === this.activePage.name.toLowerCase();
-        li.className = `file-item ${isActive ? 'active' : ''}`;
-        
-        li.innerHTML = `
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-            <polyline points="14 2 14 8 20 8"></polyline>
-            <line x1="16" y1="13" x2="8" y2="13"></line>
-            <line x1="16" y1="17" x2="8" y2="17"></line>
-          </svg>
-          <span>${escapeHTML(page.name)}</span>
-        `;
-
-        li.addEventListener('click', () => {
-          window.location.hash = `#/page/${encodeURIComponent(page.name)}`;
-        });
-
-        this.dom.fileList.appendChild(li);
-      }
+      this._renderFlatFileList(filter, activeTag);
       return;
     }
 
+    this._renderDirectoryTree(activeTag);
+  }
+
+  _matchesFilters(page, filter, activeTag) {
+    if (filter && !page.name.toLowerCase().includes(filter) && !page.content.toLowerCase().includes(filter)) {
+      return false;
+    }
+    if (activeTag) {
+      const pageTags = (page.tags || []).map(t => t.toLowerCase());
+      if (!pageTags.includes(activeTag)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  _renderFlatFileList(filter, activeTag) {
+    const list = Array.from(this.pages.values()).sort((a, b) => a.name.localeCompare(b.name));
+    for (const page of list) {
+      if (!this._matchesFilters(page, filter, activeTag)) {
+        continue;
+      }
+
+      const li = document.createElement('li');
+      const isActive = this.activePage && page.name.toLowerCase() === this.activePage.name.toLowerCase();
+      li.className = `file-item ${isActive ? 'active' : ''}`;
+
+      li.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+        </svg>
+        <span>${escapeHTML(page.name)}</span>
+      `;
+
+      li.addEventListener('click', () => {
+        window.location.hash = `#/page/${encodeURIComponent(page.name)}`;
+      });
+
+      this.dom.fileList.appendChild(li);
+    }
+  }
+
+  _renderDirectoryTree(activeTag) {
     // Build directory tree structure
     const root = { children: new Map(), files: [] };
     for (const page of this.pages.values()) {
-      if (!matchesFilters(page)) {
+      if (!this._matchesFilters(page, null, activeTag)) {
         continue;
       }
       const parts = page.name.split('/');
@@ -694,86 +701,83 @@ class WikiFlowApp {
       setSetting('expandedFolders', Array.from(this.expandedFolders));
     }
 
-    const renderNode = (node, container, pathPrefix = '') => {
-      const sortedDirs = Array.from(node.children.values()).sort((a, b) => a.name.localeCompare(b.name));
-      const sortedFiles = node.files.sort((a, b) => a.name.localeCompare(b.name));
-
-      for (const dir of sortedDirs) {
-        const fullDirPath = pathPrefix ? `${pathPrefix}/${dir.name}` : dir.name;
-        const dirKey = fullDirPath.toLowerCase();
-        const folderLi = document.createElement('li');
-        folderLi.className = 'folder-item';
-        
-        const isExpanded = this.expandedFolders.has(dirKey);
-        
-        folderLi.innerHTML = `
-          <div class="folder-title">
-            <svg class="chevron-icon ${isExpanded ? 'expanded' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="9 18 15 12 9 6"></polyline>
-            </svg>
-            <svg class="folder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-            </svg>
-            <span>${escapeHTML(dir.name)}</span>
-          </div>
-          <ul class="folder-children" style="display: ${isExpanded ? 'block' : 'none'};"></ul>
-        `;
-
-        const titleDiv = folderLi.querySelector('.folder-title');
-        const childrenUl = folderLi.querySelector('.folder-children');
-        const chevron = folderLi.querySelector('.chevron-icon');
-
-        titleDiv.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const currentlyExpanded = this.expandedFolders.has(dirKey);
-          if (currentlyExpanded) {
-            this.expandedFolders.delete(dirKey);
-            childrenUl.style.display = 'none';
-            chevron.classList.remove('expanded');
-          } else {
-            this.expandedFolders.add(dirKey);
-            childrenUl.style.display = 'block';
-            chevron.classList.add('expanded');
-          }
-          setSetting('expandedFolders', Array.from(this.expandedFolders));
-        });
-
-        renderNode(dir, childrenUl, fullDirPath);
-        container.appendChild(folderLi);
-      }
-
-      for (const file of sortedFiles) {
-        const fileLi = document.createElement('li');
-        const isActive = this.activePage && file.name.toLowerCase() === this.activePage.name.toLowerCase();
-        fileLi.className = `file-item ${isActive ? 'active' : ''}`;
-        
-        const displayTitle = file.name.split('/').pop();
-        
-        fileLi.innerHTML = `
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-            <polyline points="14 2 14 8 20 8"></polyline>
-            <line x1="16" y1="13" x2="8" y2="13"></line>
-            <line x1="16" y1="17" x2="8" y2="17"></line>
-          </svg>
-          <span>${escapeHTML(displayTitle)}</span>
-        `;
-
-        fileLi.addEventListener('click', (e) => {
-          e.stopPropagation();
-          window.location.hash = `#/page/${encodeURIComponent(file.name)}`;
-        });
-
-        container.appendChild(fileLi);
-      }
-    };
-
-    renderNode(root, this.dom.fileList);
+    this._renderDirectoryNode(root, this.dom.fileList);
   }
 
-  /**
-   * Renders selected markdown file into editor panel.
-   */
+  _renderDirectoryNode(node, container, pathPrefix = '') {
+    const sortedDirs = Array.from(node.children.values()).sort((a, b) => a.name.localeCompare(b.name));
+    const sortedFiles = node.files.sort((a, b) => a.name.localeCompare(b.name));
+
+    for (const dir of sortedDirs) {
+      const fullDirPath = pathPrefix ? `${pathPrefix}/${dir.name}` : dir.name;
+      const dirKey = fullDirPath.toLowerCase();
+      const folderLi = document.createElement('li');
+      folderLi.className = 'folder-item';
+
+      const isExpanded = this.expandedFolders.has(dirKey);
+
+      folderLi.innerHTML = `
+        <div class="folder-title">
+          <svg class="chevron-icon ${isExpanded ? 'expanded' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+          <svg class="folder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+          </svg>
+          <span>${escapeHTML(dir.name)}</span>
+        </div>
+        <ul class="folder-children" style="display: ${isExpanded ? 'block' : 'none'};"></ul>
+      `;
+
+      const titleDiv = folderLi.querySelector('.folder-title');
+      const childrenUl = folderLi.querySelector('.folder-children');
+      const chevron = folderLi.querySelector('.chevron-icon');
+
+      titleDiv.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const currentlyExpanded = this.expandedFolders.has(dirKey);
+        if (currentlyExpanded) {
+          this.expandedFolders.delete(dirKey);
+          childrenUl.style.display = 'none';
+          chevron.classList.remove('expanded');
+        } else {
+          this.expandedFolders.add(dirKey);
+          childrenUl.style.display = 'block';
+          chevron.classList.add('expanded');
+        }
+        setSetting('expandedFolders', Array.from(this.expandedFolders));
+      });
+
+      this._renderDirectoryNode(dir, childrenUl, fullDirPath);
+      container.appendChild(folderLi);
+    }
+
+    for (const file of sortedFiles) {
+      const fileLi = document.createElement('li');
+      const isActive = this.activePage && file.name.toLowerCase() === this.activePage.name.toLowerCase();
+      fileLi.className = `file-item ${isActive ? 'active' : ''}`;
+
+      const displayTitle = file.name.split('/').pop();
+
+      fileLi.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+        </svg>
+        <span>${escapeHTML(displayTitle)}</span>
+      `;
+
+      fileLi.addEventListener('click', (e) => {
+        e.stopPropagation();
+        window.location.hash = `#/page/${encodeURIComponent(file.name)}`;
+      });
+
+      container.appendChild(fileLi);
+    }
+  }
+
   async loadPage(pageName) {
     // Check if there is an unsaved file changes, save them
     if (this.isDirty) {
