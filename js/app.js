@@ -942,7 +942,13 @@ class WikiFlowApp {
       this.renderFileList();
       this.renderTagList();
       this.updateGraph();
-      window.location.hash = `#/page/${encodeURIComponent(cleanTitle)}`;
+      
+      const targetHash = `#/page/${encodeURIComponent(cleanTitle)}`;
+      if (decodeURIComponent(window.location.hash) === decodeURIComponent(targetHash)) {
+        await this.loadPage(cleanTitle);
+      } else {
+        window.location.hash = targetHash;
+      }
       return;
     }
 
@@ -969,7 +975,12 @@ class WikiFlowApp {
       this.updateGraph();
       
       // Load newly created file
-      window.location.hash = `#/page/${encodeURIComponent(cleanTitle)}`;
+      const targetHash = `#/page/${encodeURIComponent(cleanTitle)}`;
+      if (decodeURIComponent(window.location.hash) === decodeURIComponent(targetHash)) {
+        await this.loadPage(cleanTitle);
+      } else {
+        window.location.hash = targetHash;
+      }
     } catch (err) {
       alert('Could not create page file in directory.');
       console.error(err);
