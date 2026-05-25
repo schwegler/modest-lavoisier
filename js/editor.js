@@ -42,7 +42,7 @@ function preprocessWikiLinks(text) {
  * Resolves wikilinks against the list of existing page names.
  * 
  * @param {string} markdown 
- * @param {Set<string>} existingPages Set of page names in lowercase
+ * @param {Set<string> | Map<string, Object>} existingPages Set of page names or Map of page objects
  * @returns {string} Sanitized HTML
  */
 export function renderMarkdown(markdown, existingPages = new Set()) {
@@ -50,26 +50,7 @@ export function renderMarkdown(markdown, existingPages = new Set()) {
   const cleanMarkdown = stripFrontmatter(markdown);
   const preprocessed = preprocessWikiLinks(cleanMarkdown);
 
-  const exactMatchMap = new Map();
-  const suffixMatchMap = new Map();
-
-  for (const existing of existingPages) {
-    const lower = existing.toLowerCase();
-
-    // Preserve the first match behavior for exact matches
-    if (!exactMatchMap.has(lower)) {
-      exactMatchMap.set(lower, existing);
-    }
-
-    // Suffix match logic
-    const lastSlashIndex = lower.lastIndexOf('/');
-    if (lastSlashIndex !== -1) {
-      const suffix = lower.slice(lastSlashIndex + 1);
-      if (!suffixMatchMap.has(suffix)) {
-        suffixMatchMap.set(suffix, existing);
-      }
-    }
-  }
+  const isMap = existingPages instanceof Map;
 
   // Configure custom marked renderer
   const renderer = {
@@ -81,15 +62,44 @@ export function renderMarkdown(markdown, existingPages = new Set()) {
         let resolvedPageName = pageName;
         let exists = false;
         
-        // 1. Check for exact case-insensitive match (including directories)
-        if (exactMatchMap.has(key)) {
-          resolvedPageName = exactMatchMap.get(key);
-          exists = true;
-        }
-        // 2. Check for flat namespace match (suffix match)
-        else if (suffixMatchMap.has(key)) {
-          resolvedPageName = suffixMatchMap.get(key);
-          exists = true;
+        if (isMap) {
+          // Fast path for O(1) exact lookup when using Map
+          const exactMatch = existingPages.get(key);
+          if (exactMatch && exactMatch.exists) {
+            resolvedPageName = exactMatch.name;
+            exists = true;
+          } else {
+            // Check for flat namespace match (suffix match)
+            const suffix = '/' + key;
+            for (const existingKey of existingPages.keys()) {
+              if (existingKey.endsWith(suffix) && existingPages.get(existingKey).exists) {
+                resolvedPageName = existingPages.get(existingKey).name;
+                exists = true;
+                break;
+              }
+            }
+          }
+        } else {
+          // 1. Check for exact case-insensitive match (including directories)
+          for (const existing of existingPages) {
+            if (existing.toLowerCase() === key) {
+              resolvedPageName = existing;
+              exists = true;
+              break;
+            }
+          }
+
+          // 2. Check for flat namespace match (suffix match)
+          if (!exists) {
+            const suffix = '/' + key;
+            for (const existing of existingPages) {
+              if (existing.toLowerCase().endsWith(suffix)) {
+                resolvedPageName = existing;
+                exists = true;
+                break;
+              }
+            }
+          }
         }
         
         const className = exists ? 'wiki-link' : 'wiki-link broken';
