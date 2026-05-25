@@ -1,4 +1,4 @@
-# NativeNodes Wiki
+# WikiFlow
 
 Offline-capable local Markdown Wiki note-taking desktop application. A beautiful, client-side personal wiki that edits standard Markdown files directly on your local device.
 
