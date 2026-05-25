@@ -115,8 +115,25 @@ class NativeNodesApp {
   /**
    * Fallback for browser verification and IndexedDB handle checking.
    */
+
   async checkBrowserCapabilities() {
+    if (window.electronAPI) {
+      // Electron specific startup sequence
+      try {
+        const savedHandle = await getSetting('directoryHandle');
+        if (savedHandle && savedHandle.isElectron) {
+          this.isSandbox = false;
+          this.dirHandle = savedHandle;
+          await this.loadWorkspace();
+        }
+      } catch (err) {
+        console.error('Error loading electron handle:', err);
+      }
+      return;
+    }
+
     const supportsFileSystem = 'showDirectoryPicker' in window;
+
     if (!supportsFileSystem) {
       console.warn('File System Access API not supported in this browser. Mock sandbox will run.');
       // Disable local folder picking features, prompt fallback
@@ -132,11 +149,19 @@ class NativeNodesApp {
       this.dom.openFolderBtn.title = 'Please use a Chromium-based browser (Chrome, Edge, Opera) for local sync support.';
     } else {
       // Check IndexedDB if directory handle exists and auto-load if permission is already active
+
       try {
         const savedHandle = await getSetting('directoryHandle');
         if (savedHandle) {
-          const permission = await savedHandle.queryPermission({ mode: 'readwrite' });
-          if (permission === 'granted') {
+          if (savedHandle.isElectron) {
+            // Electron Mode
+            this.isSandbox = false;
+            this.dirHandle = savedHandle;
+            await this.loadWorkspace();
+          } else {
+            // Web Mode
+            const permission = await savedHandle.queryPermission({ mode: 'readwrite' });
+            if (permission === 'granted') {
             this.isSandbox = false;
             this.dirHandle = savedHandle;
             await this.loadWorkspace();
@@ -169,6 +194,7 @@ class NativeNodesApp {
                 alert('Permission denied to open folder.');
               }
             });
+          }
 
             this.dom.unlockState.innerHTML = `
               Want to open a different folder? 
@@ -460,8 +486,21 @@ class NativeNodesApp {
   /**
    * Triggers file browser picker and parses directory.
    */
+
   async selectWorkspace() {
     try {
+      if (window.electronAPI) {
+        const folderPath = await window.electronAPI.selectFolder();
+        if (folderPath) {
+          this.isSandbox = false;
+          // Use string path as handle in electron mode
+          this.dirHandle = { path: folderPath, name: folderPath.split(/[\\/]/).pop(), isElectron: true };
+          await setSetting('directoryHandle', this.dirHandle);
+          await this.loadWorkspace();
+        }
+        return;
+      }
+
       const handle = await window.showDirectoryPicker({
         mode: 'readwrite'
       });
@@ -474,6 +513,7 @@ class NativeNodesApp {
       
       await this.loadWorkspace();
     } catch (err) {
+
       if (err.name !== 'AbortError') {
         alert('Could not open workspace. Please ensure read/write permissions are granted.');
         console.error(err);
@@ -484,11 +524,20 @@ class NativeNodesApp {
   /**
    * Restores directory handles on startup.
    */
+
   async restoreWorkspace() {
     try {
       const handle = await getSetting('directoryHandle');
       if (handle) {
+        if (handle.isElectron) {
+           this.isSandbox = false;
+           this.dirHandle = handle;
+           await this.loadWorkspace();
+           return;
+        }
+
         // Chrome security policies require prompting permission on gesture click
+
         const permission = await handle.requestPermission({ mode: 'readwrite' });
         if (permission === 'granted') {
           this.isSandbox = false;
@@ -568,8 +617,33 @@ class NativeNodesApp {
   /**
    * Recursively scans for markdown files.
    */
+
   async scanDirectory(dirHandle, currentPath = '', promises = []) {
+    if (dirHandle.isElectron) {
+      const files = await window.electronAPI.readDirectory(dirHandle.path);
+      for (const file of files) {
+        const pageName = file.relativePath.slice(0, -3); // Strip .md
+        const pageObj = {
+          name: pageName,
+          content: file.content,
+          exists: true,
+          handle: file.fullPath, // Use string path instead of FileSystemFileHandle
+          tags: extractTags(file.content)
+        };
+        this.pages.set(pageName.toLowerCase(), pageObj);
+
+        const parts = pageName.toLowerCase().split('/');
+        const flatName = parts[parts.length - 1];
+        if (!this.pageNamesIndex.has(flatName)) {
+          this.pageNamesIndex.set(flatName, []);
+        }
+        this.pageNamesIndex.get(flatName).push(pageObj);
+      }
+      return;
+    }
+
     const isRoot = currentPath === '';
+
 
     for await (const entry of dirHandle.values()) {
       const relativePath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
@@ -916,19 +990,27 @@ class NativeNodesApp {
       return;
     }
 
+
     try {
       // Write file changes back to local hard drive
       const handle = this.activePage.handle;
       if (handle) {
-        const writable = await handle.createWritable();
-        await writable.write(newContent);
-        await writable.close();
+        if (typeof handle === 'string' && window.electronAPI) {
+          // Electron mode
+          await window.electronAPI.saveFile(handle, newContent);
+        } else {
+          // Web API mode
+          const writable = await handle.createWritable();
+          await writable.write(newContent);
+          await writable.close();
+        }
         
         this.markAsClean();
         this.renderTagList();
         this.updateGraph();
       }
     } catch (err) {
+
       console.error('Failed to write changes directly to disk:', err);
       // Fallback: Notify user
       this.dom.saveStatus.className = 'save-indicator dirty';
@@ -998,23 +1080,34 @@ class NativeNodesApp {
       return;
     }
 
+
     try {
-      let currentDir = this.dirHandle;
-      for (const folderName of folderPathParts) {
-        currentDir = await currentDir.getDirectoryHandle(folderName, { create: true });
+      let handleOrPath;
+      if (this.dirHandle.isElectron && window.electronAPI) {
+        // Electron mode
+        const fullPath = await window.electronAPI.createFile(this.dirHandle.path, filename, defaultContent);
+        handleOrPath = fullPath;
+      } else {
+        // Web API mode
+        let currentDir = this.dirHandle;
+        for (const folderName of folderPathParts) {
+          currentDir = await currentDir.getDirectoryHandle(folderName, { create: true });
+        }
+        const newFileHandle = await currentDir.getFileHandle(filename, { create: true });
+        const writable = await newFileHandle.createWritable();
+        await writable.write(defaultContent);
+        await writable.close();
+        handleOrPath = newFileHandle;
       }
-      const newFileHandle = await currentDir.getFileHandle(filename, { create: true });
-      const writable = await newFileHandle.createWritable();
-      await writable.write(defaultContent);
-      await writable.close();
 
       const pageObj = {
         name: cleanTitle,
         content: defaultContent,
         exists: true,
-        handle: newFileHandle,
+        handle: handleOrPath,
         tags: []
       };
+
       this.pages.set(key, pageObj);
 
       const parts = cleanTitle.toLowerCase().split('/');
