@@ -50,6 +50,32 @@ export function renderMarkdown(markdown, existingPages = new Set()) {
   const cleanMarkdown = stripFrontmatter(markdown);
   const preprocessed = preprocessWikiLinks(cleanMarkdown);
 
+
+  let exactMatchMap = null;
+  let suffixMatchMap = null;
+
+  function buildMaps() {
+    if (exactMatchMap) return;
+    exactMatchMap = new Map();
+    suffixMatchMap = new Map();
+
+    for (const existing of existingPages) {
+      const lower = existing.toLowerCase();
+      if (!exactMatchMap.has(lower)) {
+        exactMatchMap.set(lower, existing);
+      }
+
+      let currentIndex = lower.indexOf('/');
+      while (currentIndex !== -1) {
+        const suffix = lower.substring(currentIndex);
+        if (!suffixMatchMap.has(suffix)) {
+          suffixMatchMap.set(suffix, existing);
+        }
+        currentIndex = lower.indexOf('/', currentIndex + 1);
+      }
+    }
+  }
+
   // Configure custom marked renderer
   const renderer = {
     link(href, title, text) {
@@ -60,24 +86,20 @@ export function renderMarkdown(markdown, existingPages = new Set()) {
         let resolvedPageName = pageName;
         let exists = false;
         
+        buildMaps();
+
         // 1. Check for exact case-insensitive match (including directories)
-        for (const existing of existingPages) {
-          if (existing.toLowerCase() === key) {
-            resolvedPageName = existing;
-            exists = true;
-            break;
-          }
+        if (exactMatchMap.has(key)) {
+          resolvedPageName = exactMatchMap.get(key);
+          exists = true;
         }
         
         // 2. Check for flat namespace match (suffix match)
         if (!exists) {
           const suffix = '/' + key;
-          for (const existing of existingPages) {
-            if (existing.toLowerCase().endsWith(suffix)) {
-              resolvedPageName = existing;
-              exists = true;
-              break;
-            }
+          if (suffixMatchMap.has(suffix)) {
+            resolvedPageName = suffixMatchMap.get(suffix);
+            exists = true;
           }
         }
         
