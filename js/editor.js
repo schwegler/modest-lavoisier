@@ -42,7 +42,7 @@ function preprocessWikiLinks(text) {
  * Resolves wikilinks against the list of existing page names.
  * 
  * @param {string} markdown 
- * @param {Set<string>} existingPages Set of page names in lowercase
+ * @param {Set<string> | Map<string, Object>} existingPages Set of page names or Map of page objects
  * @returns {string} Sanitized HTML
  */
 export function renderMarkdown(markdown, existingPages = new Set()) {
@@ -50,6 +50,7 @@ export function renderMarkdown(markdown, existingPages = new Set()) {
   const cleanMarkdown = stripFrontmatter(markdown);
   const preprocessed = preprocessWikiLinks(cleanMarkdown);
 
+  const isMap = existingPages instanceof Map;
   let exactMatchMap = null;
   let suffixMatchMap = null;
 
@@ -58,17 +59,21 @@ export function renderMarkdown(markdown, existingPages = new Set()) {
     exactMatchMap = new Map();
     suffixMatchMap = new Map();
 
-    for (const existing of existingPages) {
-      const lower = existing.toLowerCase();
+    const iterable = isMap ? existingPages.values() : existingPages;
+    for (const existing of iterable) {
+      // Handle both string and object values
+      const name = typeof existing === 'object' && existing.name ? existing.name : existing;
+      const lower = name.toLowerCase();
+
       if (!exactMatchMap.has(lower)) {
-        exactMatchMap.set(lower, existing);
+        exactMatchMap.set(lower, name);
       }
 
       let currentIndex = lower.indexOf('/');
       while (currentIndex !== -1) {
         const suffix = lower.substring(currentIndex);
         if (!suffixMatchMap.has(suffix)) {
-          suffixMatchMap.set(suffix, existing);
+          suffixMatchMap.set(suffix, name);
         }
         currentIndex = lower.indexOf('/', currentIndex + 1);
       }
@@ -101,7 +106,7 @@ export function renderMarkdown(markdown, existingPages = new Set()) {
             exists = true;
           }
         }
-        
+
         const className = exists ? 'wiki-link' : 'wiki-link broken';
         const titleAttr = exists 
           ? `Go to ${resolvedPageName}` 

@@ -52,3 +52,6 @@ playwright/.cache/
 *.njsproj
 *.sln
 *.sw?
+
+pr-*
+pr_*
