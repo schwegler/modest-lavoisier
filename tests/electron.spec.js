@@ -12,7 +12,8 @@ test.describe('WikiFlow Electron Desktop Tests', () => {
   test.beforeAll(async () => {
     // Launch Electron process pointing to our directory root
     electronApp = await electron.launch({
-      args: ['.']
+      args: ['.'],
+      env: { ...process.env, PLAYWRIGHT_TEST: 'true' }
     });
     // Retrieve the first open window
     page = await electronApp.firstWindow();
@@ -53,7 +54,10 @@ test.describe('WikiFlow Electron Desktop Tests', () => {
       await page.click('#demoWorkspaceBtn');
     }
     // 0. Ensure split layout is active so editor is visible
-    await page.click('#layoutSplitBtn');
+    await page.click('#layoutSplitBtn', { timeout: 10000 });
+
+    // Wait for the layout to change so we know we're ready
+    await expect(page.locator('#workspacePanels')).toHaveClass(/split-only/);
 
     // 1. Click Nested Guide wiki link
     await page.click('a[data-page="Guides/Style Guide"]');
