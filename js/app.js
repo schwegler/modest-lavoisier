@@ -817,10 +817,8 @@ class WikiFlowApp {
     if (!this.activePage) return;
     const text = this.dom.editorTextarea.value;
     
-    // Formulate a set containing cased page names for wiki link resolving
-    const existingNames = new Set(Array.from(this.pages.values()).map(p => p.name));
-    
-    const html = renderMarkdown(text, existingNames);
+    // Pass the pages Map directly to avoid expensive Set creation on every render
+    const html = renderMarkdown(text, this.pages);
     
     const tags = extractTags(text);
     let tagsHTML = '';
