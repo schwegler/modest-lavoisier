@@ -76,6 +76,13 @@ test.describe('Native Nodes Electron Desktop Tests', () => {
   });
 
   test('should support selecting and restoring directory workspace in Electron', async () => {
+    await electronApp.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler('select-notes-folder');
+      ipcMain.handle('select-notes-folder', () => '/mock/schwegler-test');
+      ipcMain.removeHandler('read-directory');
+      ipcMain.handle('read-directory', () => []);
+    });
+
     // We add an init script to mock showDirectoryPicker and IndexedDB storage
     await page.addInitScript(() => {
       class MockDirectoryHandle {
@@ -98,14 +105,22 @@ test.describe('Native Nodes Electron Desktop Tests', () => {
         return new MockDirectoryHandle('schwegler-test');
       };
 
+
+
+
+
       const originalGet = IDBObjectStore.prototype.get;
+
+
       IDBObjectStore.prototype.get = function (key) {
         if (key === 'directoryHandle') {
           const request = {};
+
           setTimeout(() => {
-            request.result = new MockDirectoryHandle('schwegler-test');
+            request.result = { isElectron: true, path: '/mock/schwegler-test', name: 'schwegler-test' };
             if (request.onsuccess) request.onsuccess({ target: request });
           }, 0);
+
           return request;
         }
         return originalGet.apply(this, arguments);
@@ -118,20 +133,19 @@ test.describe('Native Nodes Electron Desktop Tests', () => {
     });
     await page.reload();
 
-    // The app should immediately detect the stored handle and display the restore button
-    const restoreBtn = page.locator('#restoreFolderBtn');
-    await expect(restoreBtn).toBeVisible();
-    await expect(restoreBtn).toContainText('Unlock Workspace (schwegler-test)');
-
-    // Click Unlock Workspace
-    await restoreBtn.click();
-
-    // It should load successfully and transition to appShell
+    // The app should automatically bypass the welcome screen and load the workspace because electron mode has no permissions
     await expect(page.locator('#appShell')).toBeVisible();
     await expect(page.locator('#activeWorkspaceName')).toHaveText('schwegler-test');
   });
 
   test('should automatically restore workspace on startup if permission is already granted', async () => {
+    await electronApp.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler('select-notes-folder');
+      ipcMain.handle('select-notes-folder', () => '/mock/schwegler-auto-restore');
+      ipcMain.removeHandler('read-directory');
+      ipcMain.handle('read-directory', () => []);
+    });
+
     // We add an init script to mock showDirectoryPicker and IndexedDB storage with permission 'granted'
     await page.addInitScript(() => {
       class MockDirectoryHandle {
@@ -150,14 +164,19 @@ test.describe('Native Nodes Electron Desktop Tests', () => {
         }
       }
 
+
+
       const originalGet = IDBObjectStore.prototype.get;
+
       IDBObjectStore.prototype.get = function (key) {
         if (key === 'directoryHandle') {
           const request = {};
+
           setTimeout(() => {
-            request.result = new MockDirectoryHandle('schwegler-auto-restore');
+            request.result = { isElectron: true, path: '/mock/schwegler-auto-restore', name: 'schwegler-auto-restore' };
             if (request.onsuccess) request.onsuccess({ target: request });
           }, 0);
+
           return request;
         }
         return originalGet.apply(this, arguments);

@@ -10,7 +10,7 @@ if (typeof process !== 'undefined' && process.mainModule === undefined) {
   process.mainModule = module;
 }
 
-const { app, BrowserWindow, protocol, session } = require('electron');
+const { app, BrowserWindow, protocol, session, dialog, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -28,6 +28,76 @@ protocol.registerSchemesAsPrivileged([
   }
 ]);
 
+
+// IPC Handlers for Node FS
+ipcMain.handle('select-notes-folder', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openDirectory', 'createDirectory']
+  });
+
+  if (!result.canceled) {
+    return result.filePaths[0];
+  }
+  return null;
+});
+
+async function readDirectoryRecursive(dirPath, rootPath = dirPath) {
+  let results = [];
+  const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
+
+  for (const entry of entries) {
+    if (entry.name.startsWith('.')) continue;
+
+    const fullPath = path.join(dirPath, entry.name);
+    const relativePath = path.relative(rootPath, fullPath).replace(/\\/g, '/');
+
+    if (entry.isDirectory()) {
+      results = results.concat(await readDirectoryRecursive(fullPath, rootPath));
+    } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) {
+      const content = await fs.promises.readFile(fullPath, 'utf8');
+      results.push({
+        name: entry.name,
+        relativePath: relativePath,
+        fullPath: fullPath,
+        content: content
+      });
+    }
+  }
+  return results;
+}
+
+ipcMain.handle('read-directory', async (event, folderPath) => {
+  try {
+    return await readDirectoryRecursive(folderPath);
+  } catch (err) {
+    console.error('Error reading directory:', err);
+    throw err;
+  }
+});
+
+ipcMain.handle('save-file', async (event, filePath, content) => {
+  try {
+    await fs.promises.writeFile(filePath, content, 'utf8');
+    return true;
+  } catch (err) {
+    console.error('Error saving file:', err);
+    throw err;
+  }
+});
+
+ipcMain.handle('create-file', async (event, folderPath, filename, content) => {
+  try {
+    const fullPath = path.join(folderPath, filename);
+    await fs.promises.mkdir(path.dirname(fullPath), { recursive: true });
+    await fs.promises.writeFile(fullPath, content, 'utf8');
+    return fullPath;
+  } catch (err) {
+    console.error('Error creating file:', err);
+    throw err;
+  }
+});
+
+
 let mainWindow = null;
 
 function createWindow() {
@@ -40,6 +110,7 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js'),
       sandbox: true
     },
     title: 'Native Nodes',
