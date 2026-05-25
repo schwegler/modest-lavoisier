@@ -64,12 +64,11 @@ test.describe('Native Nodes Electron Desktop Tests', () => {
     await expect(page.locator('#activeNoteTitle')).toHaveText('Guides/Style Guide');
 
     // 2. Verify editor textarea loads content correctly
-    const textarea = page.locator('#editorTextarea');
-    await expect(textarea).toHaveValue(/This is a sample page nested inside a subfolder/);
+    const editorContent = await page.evaluate(() => window.app.editor.getMarkdown());
+    expect(editorContent).toMatch(/This is a sample page nested inside a subfolder/);
 
     // 3. Edit content
-    await textarea.focus();
-    await textarea.fill('# Edited Desktop Page\n\nNative Nodes runs natively in Electron!');
+    await page.evaluate(() => window.app.editor.setMarkdown('# Edited Desktop Page\n\nNative Nodes runs natively in Electron!'));
     
     // 4. Verify preview render updates cased headers
     await expect(page.locator('#previewContent h1')).toHaveText('Edited Desktop Page');

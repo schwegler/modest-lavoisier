@@ -8,6 +8,7 @@
 import { getSetting, setSetting, deleteSetting } from './db.js';
 
 import { renderMarkdown, extractWikiLinks, extractTags, stripFrontmatter, escapeHTML } from './editor.js';
+import Editor from 'https://esm.sh/@toast-ui/editor@3.2.2?bundle';
 import { WikiGraph } from './graph.js';
 
 class NativeNodesApp {
@@ -89,7 +90,23 @@ class NativeNodesApp {
       helpModal: document.getElementById('helpModal')
     };
 
+
+    this.editor = new Editor({
+      el: this.dom.editorTextarea,
+      height: '100%',
+      initialEditType: 'wysiwyg',
+      previewStyle: 'vertical',
+      theme: this.theme === 'dark' ? 'dark' : 'light',
+      events: {
+        change: () => {
+          this.markAsDirty();
+          this.triggerAutoSave();
+        }
+      }
+    });
+
     this.init();
+
   }
 
   async init() {
@@ -393,11 +410,7 @@ class NativeNodesApp {
       window.print();
     });
 
-    // Editor AutoSave & Sync Change Events
-    this.dom.editorTextarea.addEventListener('input', () => {
-      this.markAsDirty();
-      this.triggerAutoSave();
-    });
+    // Editor AutoSave & Sync Change Events handled by ToastUI Editor events
 
     // Global Key Bindings
     window.addEventListener('keydown', (e) => {
@@ -417,8 +430,8 @@ class NativeNodesApp {
 
       // Find/Focus Search: Cmd+F
       if (isCmd && e.key.toLowerCase() === 'f') {
-        // Only trigger focus if not focused in textarea
-        if (document.activeElement !== this.dom.editorTextarea) {
+        // Only trigger focus if not focused in editor
+        if (!this.dom.editorTextarea.contains(document.activeElement)) {
           e.preventDefault();
           this.dom.searchInput.focus();
         }
@@ -884,7 +897,7 @@ class NativeNodesApp {
     this.activePage = page;
 
     // Load editor text
-    this.dom.editorTextarea.value = page.content;
+    this.editor.setMarkdown(page.content);
     this.dom.activeNoteTitle.textContent = page.name;
 
     // Mark as clean initially
@@ -912,7 +925,7 @@ class NativeNodesApp {
    */
   renderPreview() {
     if (!this.activePage) return;
-    const text = this.dom.editorTextarea.value;
+    const text = this.editor.getMarkdown();
     
     // Pass the pages Map directly to avoid expensive Set creation on every render
     const html = renderMarkdown(text, this.pages);
@@ -974,7 +987,7 @@ class NativeNodesApp {
   async saveActivePageSync() {
     if (!this.activePage || !this.isDirty) return;
     
-    const newContent = this.dom.editorTextarea.value;
+    const newContent = this.editor.getMarkdown();
     this.activePage.content = newContent;
     this.activePage.tags = extractTags(newContent);
 
@@ -1301,5 +1314,5 @@ class NativeNodesApp {
 
 // Instantiate on load
 window.addEventListener('DOMContentLoaded', () => {
-  new NativeNodesApp();
+  window.app = new NativeNodesApp();
 });
