@@ -1,5 +1,5 @@
 /**
- * WikiFlow - Playwright E2E Testing Configuration
+ * Native Nodes - Playwright E2E Testing Configuration
  */
 
 const { defineConfig, devices } = require('@playwright/test');

@@ -1,5 +1,5 @@
 /**
- * WikiFlow - Main Application Coordinator
+ * Native Nodes - Main Application Coordinator
  * 
  * Orchestrates filesystem access, in-memory sandbox demo mode,
  * routing, autosaving, PWA installer states, and visual graph binding.
@@ -10,7 +10,7 @@ import { getSetting, setSetting, deleteSetting } from './db.js';
 import { renderMarkdown, extractWikiLinks, extractTags, stripFrontmatter, escapeHTML } from './editor.js';
 import { WikiGraph } from './graph.js';
 
-class WikiFlowApp {
+class NativeNodesApp {
   constructor() {
     // App State
     this.dirHandle = null;
@@ -518,11 +518,11 @@ class WikiFlowApp {
     const demoNotes = [
       {
         name: 'Welcome',
-        content: `---\ntags: [welcome, guide]\n---\n# Welcome to WikiFlow! 🌊\n\nWikiFlow is a premium, client-side note-taking workspace that turns your local directory into a wiki using standard Markdown files. \n\n### Key Highlights\n1. **Local Folder Integration**: Edits write directly to your local drive. No cloud accounts required!\n2. **Wiki Double-Brackets**: Link pages together by writing [[Wiki Links]].\n3. **Connection Graph**: A force-directed dynamic visualizer mapped on the right displays all your linked notes. Drag nodes and click to explore.\n\n### Getting Started\n* Click on [[Wiki Links]] to navigate.\n* Here is an unresolved link: [[Create Me]]. Clicking it will prompt you to create that page instantly!\n* Read the [[Tutorial]] to see formatting rules.\n* Checkout our nested guide: [[Style Guide]].`
+        content: `---\ntags: [welcome, guide]\n---\n# Welcome to Native Nodes! 🌊\n\nNative Nodes is a premium, client-side note-taking workspace that turns your local directory into a wiki using standard Markdown files. \n\n### Key Highlights\n1. **Local Folder Integration**: Edits write directly to your local drive. No cloud accounts required!\n2. **Wiki Double-Brackets**: Link pages together by writing [[Wiki Links]].\n3. **Connection Graph**: A force-directed dynamic visualizer mapped on the right displays all your linked notes. Drag nodes and click to explore.\n\n### Getting Started\n* Click on [[Wiki Links]] to navigate.\n* Here is an unresolved link: [[Create Me]]. Clicking it will prompt you to create that page instantly!\n* Read the [[Tutorial]] to see formatting rules.\n* Checkout our nested guide: [[Style Guide]].`
       },
       {
         name: 'Tutorial',
-        content: `---\ntags: [tutorial, markdown]\n---\n# WikiFlow Guide & Markdown Tips 📝\n\nWiki links are written using bracket indicators. Let's see some samples:\n\n* Standard Link: [[Welcome]]\n* Custom Label: [[Welcome|Go Back Welcome]]\n\n### Markdown Features\nWrite standard GFM Markdown like tables, checklists, blockquotes:\n\n| Feature | Supported | Premium Style |\n| :--- | :---: | :---: |\n| Tables | Yes | Light/Dark themed |\n| Checklists | Yes | Custom sliders |\n| Inline code | \`const a = 1\` | Monospaced block |\n\n> "Simple design, complex connections. Keep writing."`
+        content: `---\ntags: [tutorial, markdown]\n---\n# Native Nodes Guide & Markdown Tips 📝\n\nWiki links are written using bracket indicators. Let's see some samples:\n\n* Standard Link: [[Welcome]]\n* Custom Label: [[Welcome|Go Back Welcome]]\n\n### Markdown Features\nWrite standard GFM Markdown like tables, checklists, blockquotes:\n\n| Feature | Supported | Premium Style |\n| :--- | :---: | :---: |\n| Tables | Yes | Light/Dark themed |\n| Checklists | Yes | Custom sliders |\n| Inline code | \`const a = 1\` | Monospaced block |\n\n> "Simple design, complex connections. Keep writing."`
       },
       {
         name: 'Guides/Style Guide',
@@ -1208,5 +1208,5 @@ class WikiFlowApp {
 
 // Instantiate on load
 window.addEventListener('DOMContentLoaded', () => {
-  new WikiFlowApp();
+  new NativeNodesApp();
 });

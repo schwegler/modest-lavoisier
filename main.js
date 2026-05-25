@@ -1,5 +1,5 @@
 /**
- * WikiFlow - Electron Main Process
+ * Native Nodes - Electron Main Process
  * 
  * Sets up a secure custom protocol (app://) for ESM and Service Worker support,
  * and creates a frameless macOS BrowserWindow with traffic lights integrated.
@@ -42,7 +42,7 @@ function createWindow() {
       contextIsolation: true,
       sandbox: true
     },
-    title: 'WikiFlow',
+    title: 'Native Nodes',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default', // Embeds macOS traffic lights only on macOS
     backgroundColor: '#090d16'     // Matching deep dark blue-slate theme
   });

@@ -1,10 +1,10 @@
 {
-  "name": "wikiflow",
+  "name": "native-nodes",
   "version": "1.0.0",
   "description": "Offline-capable local Markdown Wiki note-taking desktop application.",
   "author": {
-    "name": "WikiFlow Maintainers",
-    "email": "maintainer@wikiflow.notes"
+    "name": "Native Nodes Maintainers",
+    "email": "maintainer@native-nodes.notes"
   },
   "main": "main.js",
   "scripts": {
@@ -22,7 +22,7 @@
     "electron-builder": "^26.8.1"
   },
   "build": {
-    "appId": "com.wikiflow.notes",
+    "appId": "com.native-nodes.notes",
     "mac": {
       "category": "public.app-category.productivity",
       "target": [
@@ -48,7 +48,7 @@
       ]
     },
     "linux": {
-      "maintainer": "WikiFlow Maintainers <maintainer@wikiflow.notes>",
+      "maintainer": "Native Nodes Maintainers <maintainer@native-nodes.notes>",
       "icon": "icon-512.png",
       "category": "Office",
       "target": [

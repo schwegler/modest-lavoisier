@@ -1,11 +1,11 @@
 /**
- * WikiFlow - Service Worker for Offline Execution
+ * Native Nodes - Service Worker for Offline Execution
  * 
  * Implements a Stale-While-Revalidate caching strategy, enabling
  * instantaneous offline loads for local files and remote CDN dependencies.
  */
 
-const CACHE_NAME = 'wikiflow-cache-v1';
+const CACHE_NAME = 'native-nodes-cache-v1';
 const ASSETS = [
   './',
   './index.html',

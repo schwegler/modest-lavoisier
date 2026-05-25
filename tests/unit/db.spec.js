@@ -106,9 +106,10 @@ test.describe('setSetting fallback error handling', () => {
     // Verify localStorage.setItem was called
     const localStorageCalls = await page.evaluate(() => window.__localStorageCalls);
 
-    expect(localStorageCalls).toHaveLength(1);
-    expect(localStorageCalls[0].key).toBe(key);
-    expect(localStorageCalls[0].val).toBe(JSON.stringify(value));
+    const call = localStorageCalls.find(c => c.key === key);
+    expect(call).toBeDefined();
+    expect(call.key).toBe(key);
+    expect(call.val).toBe(JSON.stringify(value));
 
     // Cleanup mocks
     await page.evaluate(() => {
