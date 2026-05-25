@@ -235,9 +235,10 @@ class WikiFlowApp {
     }
 
     if (this.graph) {
+      const { nodes, links } = this.getGraphData();
       this.graph.updateData(
-        this.getGraphNodes(),
-        this.getGraphLinks(),
+        nodes,
+        links,
         this.activePage ? this.activePage.name : null,
         this.theme === 'dark'
       );
@@ -801,9 +802,10 @@ class WikiFlowApp {
 
     // Update Node positions
     if (this.graph) {
+      const { nodes, links } = this.getGraphData();
       this.graph.updateData(
-        this.getGraphNodes(),
-        this.getGraphLinks(),
+        nodes,
+        links,
         page.name,
         this.theme === 'dark'
       );
@@ -1028,23 +1030,26 @@ class WikiFlowApp {
   }
 
   /**
-   * Dynamic node resolution for graph visualization.
+   * Formulates nodes and links for graph visualization in a single pass.
    */
-  getGraphNodes() {
+  getGraphData() {
     const nodes = [];
+    const links = [];
     const existing = new Set(Array.from(this.pages.keys()));
+    const referenced = new Set();
 
-    // 1. Gather all pages in current workspace
     for (const page of this.pages.values()) {
       nodes.push({ name: page.name, exists: true });
-    }
 
-    // 2. Gather non-existent page links that are referenced
-    const referenced = new Set();
-    for (const page of this.pages.values()) {
       const extracted = extractWikiLinks(page.content);
       for (const target of extracted) {
         const resolvedName = this.resolveWikiLink(target);
+
+        links.push({
+          source: page.name,
+          target: resolvedName
+        });
+
         const key = resolvedName.toLowerCase();
         if (!existing.has(key)) {
           referenced.add(resolvedName);
@@ -1056,35 +1061,19 @@ class WikiFlowApp {
       nodes.push({ name: missingPage, exists: false });
     }
 
-    return nodes;
+    return { nodes, links };
   }
 
-  /**
-   * Formulates list of links for graph visualization.
-   */
-  getGraphLinks() {
-    const links = [];
-    for (const page of this.pages.values()) {
-      const extracted = extractWikiLinks(page.content);
-      for (const target of extracted) {
-        const resolvedName = this.resolveWikiLink(target);
-        links.push({
-          source: page.name,
-          target: resolvedName
-        });
-      }
-    }
-    return links;
-  }
 
   /**
    * Refreshes graph simulation coordinates.
    */
   updateGraph() {
     if (!this.graph) return;
+    const { nodes, links } = this.getGraphData();
     this.graph.updateData(
-      this.getGraphNodes(),
-      this.getGraphLinks(),
+      nodes,
+      links,
       this.activePage ? this.activePage.name : null,
       this.theme === 'dark'
     );
