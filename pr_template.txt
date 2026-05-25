@@ -1,7 +1,0 @@
-Title: "🧪 Add fallback error handling tests for getSetting"
-Description with:
-  * 🎯 **What:** The testing gap addressed: Missing fallback error handling tests for `getSetting` in `js/db.js` where `localStorage` is used if `indexedDB` fails.
-  * 📊 **Coverage:** What scenarios are now tested:
-    1. Simulation of `indexedDB.open` failure confirming that the settings are read from `localStorage`.
-    2. Simulation of both `indexedDB.open` and `localStorage.getItem` failures to confirm it correctly returns `undefined` safely.
-  * ✨ **Result:** The improvement in test coverage: Improved coverage for persistence reliability scenarios, testing the actual exception path of the storage mechanisms.
