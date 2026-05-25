@@ -101,7 +101,7 @@ export function renderMarkdown(markdown, existingPages = new Set()) {
             }
           }
         }
-        
+
         const className = exists ? 'wiki-link' : 'wiki-link broken';
         const titleAttr = exists 
           ? `Go to ${resolvedPageName}` 
