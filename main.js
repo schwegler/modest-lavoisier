@@ -5,7 +5,7 @@
  * and creates a frameless macOS BrowserWindow with traffic lights integrated.
  */
 
-const { app, BrowserWindow, protocol } = require('electron');
+const { app, BrowserWindow, protocol, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -51,6 +51,21 @@ function createWindow() {
 
 // Initialize Custom Protocol Handler
 app.whenReady().then(() => {
+  // Allow fileSystem permissions for local workspace directory sync
+  session.defaultSession.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
+    if (permission === 'fileSystem') {
+      return true;
+    }
+    return false;
+  });
+
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
+    if (permission === 'fileSystem') {
+      return callback(true);
+    }
+    callback(false);
+  });
+
   protocol.handle('app', (request) => {
     const parsedUrl = new URL(request.url);
     let pathname = parsedUrl.pathname;
