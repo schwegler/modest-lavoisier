@@ -332,6 +332,7 @@ export class WikiGraph {
   /**
    * Redraws the scene.
    */
+
   draw() {
     const rect = this.canvas.getBoundingClientRect();
     const w = rect.width;
@@ -344,18 +345,28 @@ export class WikiGraph {
     this.ctx.translate(this.panX, this.panY);
     this.ctx.scale(this.zoom, this.zoom);
 
-    // Styling constants
-    const accentColor = '#6366f1'; // Premium Indigo
-    const accentGlow = 'rgba(99, 102, 241, 0.25)';
-    const brokenColor = '#ef4444'; // Red-orange for missing notes
-    const brokenGlow = 'rgba(239, 68, 68, 0.2)';
-    
-    const lineColorDefault = this.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)';
-    const lineColorActive = this.isDark ? 'rgba(99, 102, 241, 0.45)' : 'rgba(99, 102, 241, 0.35)';
-    const nodeColorDefault = this.isDark ? '#334155' : '#cbd5e1';
-    const nodeColorText = this.isDark ? '#e2e8f0' : '#1e293b';
+    const theme = this._getTheme();
 
-    // 1. Draw connections/links
+    this._drawLinks(theme);
+    this._drawNodes(theme);
+
+    this.ctx.restore();
+  }
+
+  _getTheme() {
+    return {
+      accentColor: '#6366f1',
+      accentGlow: 'rgba(99, 102, 241, 0.25)',
+      brokenColor: '#ef4444',
+      brokenGlow: 'rgba(239, 68, 68, 0.2)',
+      lineColorDefault: this.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+      lineColorActive: this.isDark ? 'rgba(99, 102, 241, 0.45)' : 'rgba(99, 102, 241, 0.35)',
+      nodeColorDefault: this.isDark ? '#334155' : '#cbd5e1',
+      nodeColorText: this.isDark ? '#e2e8f0' : '#1e293b'
+    };
+  }
+
+  _drawLinks(theme) {
     this.ctx.lineWidth = 1.5;
     for (const link of this.links) {
       const isRelatedToHover = this.hoveredNode && 
@@ -369,16 +380,17 @@ export class WikiGraph {
       this.ctx.lineTo(link.target.x, link.target.y);
       
       if (isRelatedToHover || isRelatedToCurrent) {
-        this.ctx.strokeStyle = lineColorActive;
+        this.ctx.strokeStyle = theme.lineColorActive;
         this.ctx.lineWidth = 2.0;
       } else {
-        this.ctx.strokeStyle = lineColorDefault;
+        this.ctx.strokeStyle = theme.lineColorDefault;
         this.ctx.lineWidth = 1.0;
       }
       this.ctx.stroke();
     }
+  }
 
-    // 2. Draw node points
+  _drawNodes(theme) {
     for (const node of this.nodes) {
       const isHovered = node === this.hoveredNode;
       const isCurrent = node.isCurrent;
@@ -390,7 +402,7 @@ export class WikiGraph {
         this.ctx.save();
         this.ctx.beginPath();
         this.ctx.arc(node.x, node.y, node.radius + 6, 0, Math.PI * 2);
-        this.ctx.fillStyle = node.exists ? accentGlow : brokenGlow;
+        this.ctx.fillStyle = node.exists ? theme.accentGlow : theme.brokenGlow;
         this.ctx.fill();
         this.ctx.restore();
       }
@@ -402,23 +414,23 @@ export class WikiGraph {
         this.ctx.save();
         this.ctx.fillStyle = this.isDark ? '#1e293b' : '#f8fafc';
         this.ctx.fill();
-        this.ctx.strokeStyle = brokenColor;
+        this.ctx.strokeStyle = theme.brokenColor;
         this.ctx.lineWidth = 2;
         this.ctx.setLineDash([3, 2]);
         this.ctx.stroke();
         this.ctx.restore();
       } else if (isCurrent) {
-        this.ctx.fillStyle = accentColor;
+        this.ctx.fillStyle = theme.accentColor;
         this.ctx.fill();
         this.ctx.strokeStyle = '#ffffff';
         this.ctx.lineWidth = 1.5;
         this.ctx.stroke();
       } else {
-        this.ctx.fillStyle = isHovered ? accentColor : nodeColorDefault;
+        this.ctx.fillStyle = isHovered ? theme.accentColor : theme.nodeColorDefault;
         this.ctx.fill();
       }
 
-      // 3. Draw text labels
+      // Draw text labels
       const showLabel = this.zoom > 0.6 || isHovered || isCurrent;
       if (showLabel) {
         this.ctx.save();
@@ -431,12 +443,10 @@ export class WikiGraph {
         this.ctx.lineWidth = 3;
         this.ctx.strokeText(node.id, node.x, node.y + node.radius + 5);
 
-        this.ctx.fillStyle = isCurrent ? accentColor : (isHovered ? accentColor : nodeColorText);
+        this.ctx.fillStyle = isCurrent ? theme.accentColor : (isHovered ? theme.accentColor : theme.nodeColorText);
         this.ctx.fillText(node.id, node.x, node.y + node.radius + 5);
         this.ctx.restore();
       }
     }
-
-    this.ctx.restore();
   }
 }
