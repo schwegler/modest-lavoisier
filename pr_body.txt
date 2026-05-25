@@ -1,0 +1,4 @@
+🎯 **What:** The `renderFileList` function in `js/app.js` was refactored to extract complex filtering and tree-building logic into private helper methods (`_matchesFilters`, `_renderFlatFileList`, `_renderDirectoryTree`, and `_renderDirectoryNode`).
+💡 **Why:** This refactoring reduces the length and complexity of `renderFileList`, making it easier to read and maintain. The extracted helper methods have clear, singular responsibilities.
+✅ **Verification:** Ran the existing test suite (`npm run test`), which passed successfully. Visually verified the UI with a Playwright script by launching the app and ensuring the file tree renders correctly.
+✨ **Result:** Improved codebase maintainability and readability without altering the application's behavior.
