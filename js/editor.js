@@ -51,34 +51,6 @@ export function renderMarkdown(markdown, existingPages = new Set()) {
   const preprocessed = preprocessWikiLinks(cleanMarkdown);
 
   const isMap = existingPages instanceof Map;
-  let exactMatchMap = null;
-  let suffixMatchMap = null;
-
-  function buildMaps() {
-    if (exactMatchMap) return;
-    exactMatchMap = new Map();
-    suffixMatchMap = new Map();
-
-    const iterable = isMap ? existingPages.values() : existingPages;
-    for (const existing of iterable) {
-      // Handle both string and object values
-      const name = typeof existing === 'object' && existing.name ? existing.name : existing;
-      const lower = name.toLowerCase();
-
-      if (!exactMatchMap.has(lower)) {
-        exactMatchMap.set(lower, name);
-      }
-
-      let currentIndex = lower.indexOf('/');
-      while (currentIndex !== -1) {
-        const suffix = lower.substring(currentIndex);
-        if (!suffixMatchMap.has(suffix)) {
-          suffixMatchMap.set(suffix, name);
-        }
-        currentIndex = lower.indexOf('/', currentIndex + 1);
-      }
-    }
-  }
 
   // Configure custom marked renderer
   const renderer = {
@@ -90,20 +62,43 @@ export function renderMarkdown(markdown, existingPages = new Set()) {
         let resolvedPageName = pageName;
         let exists = false;
         
-        buildMaps();
-
-        // 1. Check for exact case-insensitive match (including directories)
-        if (exactMatchMap.has(key)) {
-          resolvedPageName = exactMatchMap.get(key);
-          exists = true;
-        }
-
-        // 2. Check for flat namespace match (suffix match)
-        if (!exists) {
-          const suffix = '/' + key;
-          if (suffixMatchMap.has(suffix)) {
-            resolvedPageName = suffixMatchMap.get(suffix);
+        if (isMap) {
+          // Fast path for O(1) exact lookup when using Map
+          const exactMatch = existingPages.get(key);
+          if (exactMatch && exactMatch.exists) {
+            resolvedPageName = exactMatch.name;
             exists = true;
+          } else {
+            // Check for flat namespace match (suffix match)
+            const suffix = '/' + key;
+            for (const existingKey of existingPages.keys()) {
+              if (existingKey.endsWith(suffix) && existingPages.get(existingKey).exists) {
+                resolvedPageName = existingPages.get(existingKey).name;
+                exists = true;
+                break;
+              }
+            }
+          }
+        } else {
+          // 1. Check for exact case-insensitive match (including directories)
+          for (const existing of existingPages) {
+            if (existing.toLowerCase() === key) {
+              resolvedPageName = existing;
+              exists = true;
+              break;
+            }
+          }
+
+          // 2. Check for flat namespace match (suffix match)
+          if (!exists) {
+            const suffix = '/' + key;
+            for (const existing of existingPages) {
+              if (existing.toLowerCase().endsWith(suffix)) {
+                resolvedPageName = existing;
+                exists = true;
+                break;
+              }
+            }
           }
         }
 
