@@ -37,3 +37,18 @@ lerna-debug.log*
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Playwright test artifacts
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
