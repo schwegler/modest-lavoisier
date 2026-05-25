@@ -40,10 +40,18 @@ test.describe('WikiFlow Electron Desktop Tests', () => {
     // 4. Verify macOS header spacing is applied via CSS overrides
     const header = page.locator('header.main-header');
     const paddingLeft = await header.evaluate(el => window.getComputedStyle(el).paddingLeft);
-    expect(paddingLeft).toBe('80px'); // 80px left padding ensures traffic light controls clear note title
+    if (process.platform === 'darwin') {
+      expect(paddingLeft).toBe('80px'); // 80px left padding ensures traffic light controls clear note title
+    } else {
+      expect(paddingLeft).toBe('32px'); // Standard padding on non-mac platforms
+    }
   });
 
   test('should enable editing and link navigation within Electron runtime', async () => {
+    // Ensure we are in a workspace first
+    if (await page.locator('#demoWorkspaceBtn').isVisible()) {
+      await page.click('#demoWorkspaceBtn');
+    }
     // 0. Ensure split layout is active so editor is visible
     await page.click('#layoutSplitBtn');
 
