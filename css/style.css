@@ -664,28 +664,40 @@ header.main-header {
   font-weight: 600;
 }
 
-/* WIKILINK STYLING */
-.wiki-link {
+/* LINK STYLING */
+.markdown-body a {
   color: var(--accent);
   text-decoration: none;
   font-weight: 500;
-  border-bottom: 1px solid transparent;
-  transition: border-color var(--transition-fast);
-}
-
-.wiki-link:hover {
-  border-color: var(--accent);
-}
-
-.wiki-link.broken {
-  color: var(--broken-link);
-  background-color: var(--broken-bg);
-  border-bottom: 1px dashed var(--broken-link);
-  padding: 1px 3px;
+  border-bottom: 1.5px solid var(--accent-glow);
+  transition: color var(--transition-fast), border-color var(--transition-fast), background-color var(--transition-fast);
+  padding: 0px 3px;
+  margin: 0px -1px;
   border-radius: 4px;
 }
 
-.wiki-link.broken:after {
+.markdown-body a:hover {
+  color: var(--accent-hover);
+  border-color: var(--accent);
+  background-color: var(--active-bg);
+}
+
+.markdown-body a.wiki-link.broken {
+  color: var(--broken-link);
+  background-color: var(--broken-bg);
+  border-bottom: 1px dashed var(--broken-link);
+  padding: 1px 4px;
+  margin: 0;
+  border-radius: 4px;
+}
+
+.markdown-body a.wiki-link.broken:hover {
+  color: var(--broken-link);
+  background-color: rgba(220, 38, 38, 0.12);
+  border-color: var(--broken-link);
+}
+
+.markdown-body a.wiki-link.broken:after {
   content: ' ↗';
   font-size: 9px;
   vertical-align: super;
