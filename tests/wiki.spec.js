@@ -1,10 +1,10 @@
 /**
- * WikiFlow - Browser E2E Tests
+ * Native Nodes - Browser E2E Tests
  */
 
 const { test, expect } = require('@playwright/test');
 
-test.describe('WikiFlow Web App Tests', () => {
+test.describe('Native Nodes Web App Tests', () => {
   
   test.beforeEach(async ({ page }) => {
     // Load home page served by Python server
@@ -13,8 +13,8 @@ test.describe('WikiFlow Web App Tests', () => {
 
   test('should load welcome card and enter sandbox mode', async ({ page }) => {
     // 1. Verify Welcome Shell structure
-    await expect(page).toHaveTitle(/WikiFlow/);
-    await expect(page.locator('#welcomeShell h2')).toHaveText('Welcome to WikiFlow');
+    await expect(page).toHaveTitle(/Native Nodes/);
+    await expect(page.locator('#welcomeShell h2')).toHaveText('Welcome to Native Nodes');
 
     // 2. Click Sandbox Mode CTA
     await page.click('#demoWorkspaceBtn');
@@ -25,7 +25,7 @@ test.describe('WikiFlow Web App Tests', () => {
 
     // 4. Verify Active Page loads "Welcome" note
     await expect(page.locator('#activeNoteTitle')).toHaveText('Welcome');
-    await expect(page.locator('#previewContent h1')).toContainText('Welcome to WikiFlow!');
+    await expect(page.locator('#previewContent h1')).toContainText('Welcome to Native Nodes!');
   });
 
   test('should support nested file tree and collapse interactions', async ({ page }) => {

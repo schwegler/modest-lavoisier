@@ -1,5 +1,5 @@
 /**
- * WikiFlow - Interactive Force-Directed Graph View
+ * Native Nodes - Interactive Force-Directed Graph View
  * 
  * Renders page connections on a high-DPI Canvas with basic physics
  * and interactive controls (pan, zoom, hover highlights, drag-and-drop).

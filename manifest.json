@@ -1,6 +1,6 @@
 {
-  "name": "WikiFlow Notes",
-  "short_name": "WikiFlow",
+  "name": "Native Nodes Notes",
+  "short_name": "Native Nodes",
   "description": "Offline-capable local Markdown Wiki note-taking app.",
   "start_url": "./index.html",
   "display": "standalone",

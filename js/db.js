@@ -1,10 +1,10 @@
 /**
- * WikiFlow - Local Storage & Settings Manager (IndexedDB)
+ * Native Nodes - Local Storage & Settings Manager (IndexedDB)
  * 
  * Provides persistence for FileSystemHandles and UI settings.
  */
 
-const DB_NAME = 'WikiFlowDB';
+const DB_NAME = 'NativeNodesDB';
 const DB_VERSION = 1;
 const STORE_NAME = 'settings';
 

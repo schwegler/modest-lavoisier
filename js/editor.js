@@ -1,5 +1,5 @@
 /**
- * WikiFlow - Editor & Markdown Subsystem
+ * Native Nodes - Editor & Markdown Subsystem
  * 
  * Handles rendering of Markdown text and extraction of Wiki style bracket links.
  */

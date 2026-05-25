@@ -1,4 +1,4 @@
-# WikiFlow
+# Native Nodes
 
 Offline-capable local Markdown Wiki note-taking desktop application. A beautiful, client-side personal wiki that edits standard Markdown files directly on your local device.
 
@@ -72,4 +72,4 @@ npm test
 
 ## Maintainers
 
-WikiFlow Maintainers (<maintainer@wikiflow.notes>)
+Native Nodes Maintainers (<maintainer@native-nodes.notes>)

@@ -1,11 +1,11 @@
 /**
- * WikiFlow - Electron Desktop App E2E Tests
+ * Native Nodes - Electron Desktop App E2E Tests
  */
 
 const { _electron: electron } = require('@playwright/test');
 const { test, expect } = require('@playwright/test');
 
-test.describe('WikiFlow Electron Desktop Tests', () => {
+test.describe('Native Nodes Electron Desktop Tests', () => {
   let electronApp;
   let page;
 
@@ -27,8 +27,8 @@ test.describe('WikiFlow Electron Desktop Tests', () => {
 
   test('should launch desktop app shell and inject Electron specific variables', async () => {
     // 1. Verify standard title loads
-    await expect(page).toHaveTitle(/WikiFlow/);
-    await expect(page.locator('#welcomeShell h2')).toHaveText('Welcome to WikiFlow');
+    await expect(page).toHaveTitle(/Native Nodes/);
+    await expect(page.locator('#welcomeShell h2')).toHaveText('Welcome to Native Nodes');
 
     // 2. Open sandbox mock workspace
     await page.click('#demoWorkspaceBtn');
@@ -69,7 +69,7 @@ test.describe('WikiFlow Electron Desktop Tests', () => {
 
     // 3. Edit content
     await textarea.focus();
-    await textarea.fill('# Edited Desktop Page\n\nWikiFlow runs natively in Electron!');
+    await textarea.fill('# Edited Desktop Page\n\nNative Nodes runs natively in Electron!');
     
     // 4. Verify preview render updates cased headers
     await expect(page.locator('#previewContent h1')).toHaveText('Edited Desktop Page');
