@@ -23,6 +23,12 @@ class WikiFlowApp {
     this.selectedTag = null;
     this.saveTimeout = null;
 
+    // Check if running in Electron environment
+    this.isElectron = navigator.userAgent.toLowerCase().includes('electron');
+    if (this.isElectron) {
+      document.body.classList.add('electron-window');
+    }
+
     // Graph Visualizer instance
     this.graph = null;
 
@@ -39,6 +45,7 @@ class WikiFlowApp {
       menuToggleBtn: document.getElementById('menuToggleBtn'),
       searchInput: document.getElementById('searchInput'),
       sidebarNewBtn: document.getElementById('sidebarNewBtn'),
+      sidebarCollapseAllBtn: document.getElementById('sidebarCollapseAllBtn'),
       fileList: document.getElementById('fileList'),
       tagList: document.getElementById('tagList'),
       activeWorkspaceName: document.getElementById('activeWorkspaceName'),
@@ -198,6 +205,10 @@ class WikiFlowApp {
     if (savedGraphVisible !== undefined) {
       this.setGraphVisibility(savedGraphVisible);
     }
+
+    // Expanded folders state
+    const savedExpanded = await getSetting('expandedFolders');
+    this.expandedFolders = savedExpanded ? new Set(savedExpanded) : null;
   }
 
   /**
@@ -272,6 +283,13 @@ class WikiFlowApp {
     // Sidebar Items
     this.dom.changeWorkspaceBtn.addEventListener('click', () => this.selectWorkspace());
     this.dom.sidebarNewBtn.addEventListener('click', () => this.openNewNoteModal());
+    this.dom.sidebarCollapseAllBtn.addEventListener('click', () => {
+      if (this.expandedFolders) {
+        this.expandedFolders.clear();
+        setSetting('expandedFolders', []);
+        this.renderFileList();
+      }
+    });
     this.dom.searchInput.addEventListener('input', () => this.renderFileList());
     this.dom.clearTagFilterBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -653,6 +671,7 @@ class WikiFlowApp {
       for (const key of root.children.keys()) {
         this.expandedFolders.add(key.toLowerCase());
       }
+      setSetting('expandedFolders', Array.from(this.expandedFolders));
     }
 
     const renderNode = (node, container, pathPrefix = '') => {
@@ -696,6 +715,7 @@ class WikiFlowApp {
             childrenUl.style.display = 'block';
             chevron.classList.add('expanded');
           }
+          setSetting('expandedFolders', Array.from(this.expandedFolders));
         });
 
         renderNode(dir, childrenUl, fullDirPath);

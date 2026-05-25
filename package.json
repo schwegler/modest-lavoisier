@@ -1,0 +1,35 @@
+{
+  "name": "wikiflow",
+  "version": "1.0.0",
+  "description": "Offline-capable local Markdown Wiki note-taking desktop application.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "package": "electron-builder --mac"
+  },
+  "devDependencies": {
+    "electron": "^29.1.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.wikiflow.notes",
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": ["dmg", "zip"]
+    },
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "index.html",
+      "main.js",
+      "manifest.json",
+      "sw.js",
+      "css/**/*",
+      "js/**/*",
+      "icon.svg",
+      "icon-192.png",
+      "icon-512.png"
+    ]
+  }
+}
