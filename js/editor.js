@@ -50,28 +50,23 @@ export function renderMarkdown(markdown, existingPages = new Set()) {
   const cleanMarkdown = stripFrontmatter(markdown);
   const preprocessed = preprocessWikiLinks(cleanMarkdown);
 
+  const exactMatchMap = new Map();
+  const suffixMatchMap = new Map();
 
-  let exactMatchMap = null;
-  let suffixMatchMap = null;
+  for (const existing of existingPages) {
+    const lower = existing.toLowerCase();
 
-  function buildMaps() {
-    if (exactMatchMap) return;
-    exactMatchMap = new Map();
-    suffixMatchMap = new Map();
+    // Preserve the first match behavior for exact matches
+    if (!exactMatchMap.has(lower)) {
+      exactMatchMap.set(lower, existing);
+    }
 
-    for (const existing of existingPages) {
-      const lower = existing.toLowerCase();
-      if (!exactMatchMap.has(lower)) {
-        exactMatchMap.set(lower, existing);
-      }
-
-      let currentIndex = lower.indexOf('/');
-      while (currentIndex !== -1) {
-        const suffix = lower.substring(currentIndex);
-        if (!suffixMatchMap.has(suffix)) {
-          suffixMatchMap.set(suffix, existing);
-        }
-        currentIndex = lower.indexOf('/', currentIndex + 1);
+    // Suffix match logic
+    const lastSlashIndex = lower.lastIndexOf('/');
+    if (lastSlashIndex !== -1) {
+      const suffix = lower.slice(lastSlashIndex + 1);
+      if (!suffixMatchMap.has(suffix)) {
+        suffixMatchMap.set(suffix, existing);
       }
     }
   }
@@ -93,14 +88,10 @@ export function renderMarkdown(markdown, existingPages = new Set()) {
           resolvedPageName = exactMatchMap.get(key);
           exists = true;
         }
-        
         // 2. Check for flat namespace match (suffix match)
-        if (!exists) {
-          const suffix = '/' + key;
-          if (suffixMatchMap.has(suffix)) {
-            resolvedPageName = suffixMatchMap.get(suffix);
-            exists = true;
-          }
+        else if (suffixMatchMap.has(key)) {
+          resolvedPageName = suffixMatchMap.get(key);
+          exists = true;
         }
         
         const className = exists ? 'wiki-link' : 'wiki-link broken';
