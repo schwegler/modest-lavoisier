@@ -72,6 +72,11 @@ app.whenReady().then(() => {
     callback(false);
   });
 
+  // Allow file operations on restricted paths (like user home directories) when selected by user
+  session.defaultSession.on('file-system-access-restricted', (event, details, callback) => {
+    callback('allow');
+  });
+
   protocol.handle('app', (request) => {
     const parsedUrl = new URL(request.url);
     let pathname = parsedUrl.pathname;
