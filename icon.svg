@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#1e293b" />
+    </linearGradient>
+
+    <!-- Node Glow -->
+    <radialGradient id="glowGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#6366f1" stop-opacity="0.3" />
+      <stop offset="100%" stop-color="#6366f1" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Active Glow -->
+    <linearGradient id="activeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8b5cf6" />
+      <stop offset="100%" stop-color="#6366f1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background Base -->
+  <rect width="512" height="512" rx="120" fill="url(#bgGrad)" />
+
+  <!-- Outer Glow Rings -->
+  <circle cx="256" cy="256" r="180" fill="none" stroke="#334155" stroke-width="2" stroke-dasharray="8 8" opacity="0.3" />
+  <circle cx="256" cy="256" r="120" fill="none" stroke="#475569" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.4" />
+
+  <!-- Document Outline (Semi-transparent) -->
+  <path d="M190 140 H280 L350 210 V372 C350 382.9 341.1 392 330 392 H190 C178.9 392 170 382.9 170 372 V160 C170 149.1 178.9 140 190 140 Z" 
+        fill="none" stroke="#475569" stroke-width="4" stroke-linejoin="round" opacity="0.5" />
+  <path d="M280 140 V210 H350" fill="none" stroke="#475569" stroke-width="4" stroke-linejoin="round" opacity="0.5" />
+
+  <!-- Wiki Node Connections (Graph Overlay) -->
+  <!-- Connection Lines -->
+  <line x1="200" y1="290" x2="270" y2="210" stroke="#6366f1" stroke-width="4" opacity="0.8" />
+  <line x1="270" y1="210" x2="320" y2="310" stroke="#6366f1" stroke-width="4" opacity="0.8" />
+  <line x1="200" y1="290" x2="320" y2="310" stroke="#475569" stroke-width="3" opacity="0.6" stroke-dasharray="5 3" />
+  <line x1="270" y1="210" x2="240" y2="350" stroke="#6366f1" stroke-width="4" opacity="0.8" />
+  <line x1="200" y1="290" x2="240" y2="350" stroke="#6366f1" stroke-width="4" opacity="0.8" />
+
+  <!-- Glow halos behind nodes -->
+  <circle cx="270" cy="210" r="40" fill="url(#glowGrad)" />
+  <circle cx="200" cy="290" r="30" fill="url(#glowGrad)" />
+  <circle cx="320" cy="310" r="30" fill="url(#glowGrad)" />
+  <circle cx="240" cy="350" r="35" fill="url(#glowGrad)" />
+
+  <!-- Node Dots -->
+  <!-- Top Node (Active/Main) -->
+  <circle cx="270" cy="210" r="14" fill="url(#activeGrad)" stroke="#ffffff" stroke-width="2" />
+  
+  <!-- Secondary Nodes -->
+  <circle cx="200" cy="290" r="10" fill="#cbd5e1" stroke="#334155" stroke-width="2" />
+  <circle cx="320" cy="310" r="10" fill="#cbd5e1" stroke="#334155" stroke-width="2" />
+  <circle cx="240" cy="350" r="12" fill="#818cf8" stroke="#334155" stroke-width="2" />
+</svg>
