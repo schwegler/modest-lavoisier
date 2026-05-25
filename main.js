@@ -5,6 +5,11 @@
  * and creates a frameless macOS BrowserWindow with traffic lights integrated.
  */
 
+// Workaround for Playwright v1.40.0 compatibility with Electron 28+
+if (typeof process !== 'undefined' && process.mainModule === undefined) {
+  process.mainModule = module;
+}
+
 const { app, BrowserWindow, protocol, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
