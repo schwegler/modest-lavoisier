@@ -150,11 +150,14 @@ class WikiFlowApp {
               this.dom.openFolderBtn.parentNode.insertBefore(restoreBtn, this.dom.demoWorkspaceBtn);
             }
             
+            const escapeHTML = (str) => str.replace(/[&<>'"]/g,
+              tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+            );
             restoreBtn.innerHTML = `
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
               </svg>
-              Unlock Workspace (${savedHandle.name})
+              Unlock Workspace (${escapeHTML(savedHandle.name)})
             `;
             
             restoreBtn.addEventListener('click', async () => {
