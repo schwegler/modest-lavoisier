@@ -15,6 +15,7 @@ class WikiFlowApp {
     // App State
     this.dirHandle = null;
     this.pages = new Map(); // Lowercase Page Name -> { name, content, handle, exists }
+    this.pageNamesIndex = new Map(); // Flat Name -> Array of Page Objects
     this.activePage = null;  // { name, content }
     this.theme = 'dark';
     this.layout = 'split'; // 'edit', 'split', 'preview'
@@ -514,6 +515,7 @@ class WikiFlowApp {
 
     // Populates demo contents
     this.pages.clear();
+    this.pageNamesIndex.clear();
     const demoNotes = [
       {
         name: 'Welcome',
@@ -530,13 +532,21 @@ class WikiFlowApp {
     ];
 
     for (const note of demoNotes) {
-      this.pages.set(note.name.toLowerCase(), {
+      const pageObj = {
         name: note.name,
         content: note.content,
         exists: true,
         handle: null,
         tags: extractTags(note.content)
-      });
+      };
+      this.pages.set(note.name.toLowerCase(), pageObj);
+
+      const parts = note.name.toLowerCase().split('/');
+      const flatName = parts[parts.length - 1];
+      if (!this.pageNamesIndex.has(flatName)) {
+        this.pageNamesIndex.set(flatName, []);
+      }
+      this.pageNamesIndex.get(flatName).push(pageObj);
     }
 
     this.showAppShell();
@@ -550,6 +560,7 @@ class WikiFlowApp {
     this.dom.activeWorkspaceName.textContent = this.dirHandle.name;
 
     this.pages.clear();
+    this.pageNamesIndex.clear();
     await this.scanDirectory(this.dirHandle);
     
     this.showAppShell();
@@ -570,13 +581,21 @@ class WikiFlowApp {
           const content = await file.text();
           const pageName = relativePath.slice(0, -3); // Strip .md
 
-          this.pages.set(pageName.toLowerCase(), {
+          const pageObj = {
             name: pageName,
             content: content,
             exists: true,
             handle: entry,
             tags: extractTags(content)
-          });
+          };
+          this.pages.set(pageName.toLowerCase(), pageObj);
+
+          const parts = pageName.toLowerCase().split('/');
+          const flatName = parts[parts.length - 1];
+          if (!this.pageNamesIndex.has(flatName)) {
+            this.pageNamesIndex.set(flatName, []);
+          }
+          this.pageNamesIndex.get(flatName).push(pageObj);
         })());
       } else if (entry.kind === 'directory') {
         if (entry.name.startsWith('.')) continue; // skip hidden/system directories
@@ -954,13 +973,21 @@ class WikiFlowApp {
     const defaultContent = `---\ntags: []\n---\n# ${relativePathParts[relativePathParts.length - 1]}\n\nStart writing notes... Use [[WikiLinks]] to connect pages.`;
 
     if (this.isSandbox) {
-      this.pages.set(key, {
+      const pageObj = {
         name: cleanTitle,
         content: defaultContent,
         exists: true,
         handle: null,
         tags: []
-      });
+      };
+      this.pages.set(key, pageObj);
+
+      const parts = cleanTitle.toLowerCase().split('/');
+      const flatName = parts[parts.length - 1];
+      if (!this.pageNamesIndex.has(flatName)) {
+        this.pageNamesIndex.set(flatName, []);
+      }
+      this.pageNamesIndex.get(flatName).push(pageObj);
       
       this.renderFileList();
       this.renderTagList();
@@ -985,13 +1012,21 @@ class WikiFlowApp {
       await writable.write(defaultContent);
       await writable.close();
 
-      this.pages.set(key, {
+      const pageObj = {
         name: cleanTitle,
         content: defaultContent,
         exists: true,
         handle: newFileHandle,
         tags: []
-      });
+      };
+      this.pages.set(key, pageObj);
+
+      const parts = cleanTitle.toLowerCase().split('/');
+      const flatName = parts[parts.length - 1];
+      if (!this.pageNamesIndex.has(flatName)) {
+        this.pageNamesIndex.set(flatName, []);
+      }
+      this.pageNamesIndex.get(flatName).push(pageObj);
 
       this.renderFileList();
       this.renderTagList();
@@ -1024,12 +1059,22 @@ class WikiFlowApp {
     if (this.pages.has(key)) {
       return this.pages.get(key).name; // Exact match
     }
+
+    if (this.pageNamesIndex.has(key)) {
+      const matches = this.pageNamesIndex.get(key);
+      if (matches && matches.length > 0) {
+        return matches[0].name; // Flat suffix match
+      }
+    }
+
+    // Fallback for multi-segment suffix matching (e.g. [[sub/page]] -> archive/sub/page)
     const suffix = '/' + key;
     for (const [existingKey, page] of this.pages.entries()) {
       if (existingKey.endsWith(suffix)) {
-        return page.name; // Flat suffix match
+        return page.name;
       }
     }
+
     return targetName; // Not found, keep as is
   }
 
