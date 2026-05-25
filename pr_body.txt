@@ -1,0 +1,16 @@
+🎯 **What:**
+Added missing unit tests for the `renderMarkdown` function in `js/editor.js`. The test gap was preventing proper validation of HTML rendering, XSS sanitization, and wikilink integration.
+
+📊 **Coverage:**
+The following scenarios are now covered:
+- Handling of null, undefined, or empty markdown strings.
+- Rendering of basic markdown syntax (bold, italic, lists, etc).
+- Stripping of frontmatter before rendering the markdown string.
+- Validating the DOMPurify setup strips potentially dangerous HTML (XSS prevention).
+- Validating external HTTP links to render with proper targets and rels.
+- Broken wiki links render with the `broken` class.
+- Valid wiki links render properly without the broken class based on `existingPages` data in both exact matches and flat namespace matches.
+- Labelled wiki links render the defined label correctly.
+
+✨ **Result:**
+Significant improvement in test coverage over the core editor component by validating its markdown rendering layer comprehensively.
