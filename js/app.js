@@ -6,7 +6,7 @@
  */
 
 import { getSetting, setSetting, deleteSetting } from './db.js';
-import { renderMarkdown, extractWikiLinks, extractTags, stripFrontmatter } from './editor.js';
+import { renderMarkdown, extractWikiLinks, extractTags, stripFrontmatter, escapeHTML } from './editor.js';
 import { WikiGraph } from './graph.js';
 
 class WikiFlowApp {
@@ -641,7 +641,7 @@ class WikiFlowApp {
             <line x1="16" y1="13" x2="8" y2="13"></line>
             <line x1="16" y1="17" x2="8" y2="17"></line>
           </svg>
-          <span>${page.name}</span>
+          <span>${escapeHTML(page.name)}</span>
         `;
 
         li.addEventListener('click', () => {
@@ -700,7 +700,7 @@ class WikiFlowApp {
             <svg class="folder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
             </svg>
-            <span>${dir.name}</span>
+            <span>${escapeHTML(dir.name)}</span>
           </div>
           <ul class="folder-children" style="display: ${isExpanded ? 'block' : 'none'};"></ul>
         `;
@@ -742,7 +742,7 @@ class WikiFlowApp {
             <line x1="16" y1="13" x2="8" y2="13"></line>
             <line x1="16" y1="17" x2="8" y2="17"></line>
           </svg>
-          <span>${displayTitle}</span>
+          <span>${escapeHTML(displayTitle)}</span>
         `;
 
         fileLi.addEventListener('click', (e) => {
@@ -811,9 +811,6 @@ class WikiFlowApp {
     const tags = extractTags(text);
     let tagsHTML = '';
     if (tags && tags.length > 0) {
-      const escapeHTML = (str) => str.replace(/[&<>'"]/g, 
-        tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
-      );
       tagsHTML = `<div class="preview-tags-container">` +
         tags.map(tag => `<span class="tag-pill" data-tag="${escapeHTML(tag)}">#${escapeHTML(tag)}</span>`).join('') +
         `</div>`;
@@ -1113,9 +1110,6 @@ class WikiFlowApp {
       const isActive = this.selectedTag && this.selectedTag.toLowerCase() === tag.toLowerCase();
       li.className = `tag-item ${isActive ? 'active' : ''}`;
       
-      const escapeHTML = (str) => str.replace(/[&<>'"]/g, 
-        tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
-      );
 
       li.innerHTML = `
         <span class="tag-name">#${escapeHTML(tag)}</span>
