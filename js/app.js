@@ -566,26 +566,39 @@ class WikiFlowApp {
   /**
    * Recursively scans for markdown files.
    */
-  async scanDirectory(dirHandle, currentPath = '') {
+  async scanDirectory(dirHandle, currentPath = '', promises = []) {
+    const isRoot = currentPath === '';
+
     for await (const entry of dirHandle.values()) {
       const relativePath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
       
       if (entry.kind === 'file' && entry.name.toLowerCase().endsWith('.md')) {
-        const file = await entry.getFile();
-        const content = await file.text();
-        const pageName = relativePath.slice(0, -3); // Strip .md
-        
-        this.pages.set(pageName.toLowerCase(), {
-          name: pageName,
-          content: content,
-          exists: true,
-          handle: entry,
-          tags: extractTags(content)
-        });
+        promises.push((async () => {
+          const file = await entry.getFile();
+          const content = await file.text();
+          const pageName = relativePath.slice(0, -3); // Strip .md
+
+          this.pages.set(pageName.toLowerCase(), {
+            name: pageName,
+            content: content,
+            exists: true,
+            handle: entry,
+            tags: extractTags(content)
+          });
+        })());
       } else if (entry.kind === 'directory') {
         if (entry.name.startsWith('.')) continue; // skip hidden/system directories
-        await this.scanDirectory(entry, relativePath);
+        await this.scanDirectory(entry, relativePath, promises);
       }
+
+      if (promises.length >= 100) {
+        await Promise.all(promises);
+        promises.length = 0;
+      }
+    }
+
+    if (isRoot && promises.length > 0) {
+      await Promise.all(promises);
     }
   }
 
