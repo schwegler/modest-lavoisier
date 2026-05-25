@@ -17,9 +17,9 @@
     "test": "playwright test"
   },
   "devDependencies": {
-    "@playwright/test": "^1.40.0",
-    "electron": "^29.1.0",
-    "electron-builder": "^24.13.3"
+    "@playwright/test": "^1.60.0",
+    "electron": "^39.8.5",
+    "electron-builder": "^26.8.1"
   },
   "build": {
     "appId": "com.wikiflow.notes",
