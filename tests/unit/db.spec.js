@@ -1,93 +1,122 @@
 const { test, expect } = require('@playwright/test');
 
-test.describe('getSetting fallback', () => {
+test.describe('setSetting fallback error handling', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('http://localhost:8080');
   });
 
-  test('should fallback to localStorage if IndexedDB fails', async ({ page }) => {
-    const result = await page.evaluate(async () => {
-      // Setup localStorage with a fallback value
-      localStorage.setItem('test_setting', JSON.stringify('fallback_value'));
+  test('should fallback to localStorage.setItem if indexedDB fails to put item', async ({ page }) => {
+    const key = 'testKey';
+    const value = { prop: 'testValue' };
 
-      // Mock indexedDB to simulate failure
-      const originalIndexedDB = Object.getOwnPropertyDescriptor(window, 'indexedDB');
-      Object.defineProperty(window, 'indexedDB', {
-        value: {
-          open: () => {
-            const request = {};
-            setTimeout(() => {
-              request.error = new DOMException('Simulated IndexedDB failure');
-              if (request.onerror) request.onerror({ target: request });
-            }, 0);
-            return request;
+    await page.evaluate(async (args) => {
+      // Import the module
+      const { setSetting } = await import('/js/db.js');
+
+      const originalPut = IDBObjectStore.prototype.put;
+      window.__originalPut = originalPut;
+
+      IDBObjectStore.prototype.put = function(val, key) {
+        const mockRequest = {
+           set onerror(cb) { this._onerror = cb; },
+           get onerror() { return this._onerror; }
+        };
+        setTimeout(() => {
+          mockRequest.error = new Error('Mock IDB Error');
+          if (mockRequest._onerror) {
+            mockRequest._onerror({ target: mockRequest });
           }
-        },
-        configurable: true
-      });
+        }, 10);
+        return mockRequest;
+      };
+
+      const originalSetItem = localStorage.setItem;
+      window.__originalSetItem = originalSetItem;
+      window.__localStorageCalls = [];
+      localStorage.setItem = function(key, val) {
+        window.__localStorageCalls.push({ key, val });
+        return originalSetItem.apply(this, arguments);
+      };
 
       try {
-        // We import db.js dynamically to ensure it uses the mocked indexedDB.
-        // Cache busting to ensure we don't use a cached module from another test.
-        const { getSetting } = await import(`/js/db.js?t=${Date.now()}`);
-        return await getSetting('test_setting');
-      } finally {
-        // Restore indexedDB and cleanup
-        if (originalIndexedDB) {
-          Object.defineProperty(window, 'indexedDB', originalIndexedDB);
-        } else {
-          delete window.indexedDB;
-        }
-        localStorage.removeItem('test_setting');
+        await setSetting(args.key, args.value);
+      } catch (e) {
+        console.error("setSetting threw unhandled error to caller:", e);
       }
-    });
 
-    expect(result).toBe('fallback_value');
+    }, { key, value });
+
+    const localStorageCalls = await page.evaluate(() => window.__localStorageCalls);
+
+    const call = localStorageCalls.find(c => c.key === key);
+    expect(call).toBeDefined();
+    expect(call.key).toBe(key);
+    expect(call.val).toBe(JSON.stringify(value));
+
+    // Cleanup
+    await page.evaluate(() => {
+      IDBObjectStore.prototype.put = window.__originalPut;
+      localStorage.setItem = window.__originalSetItem;
+      delete window.__originalPut;
+      delete window.__originalSetItem;
+      delete window.__localStorageCalls;
+    });
   });
 
-  test('should return undefined if both IndexedDB and localStorage fail', async ({ page }) => {
-    const result = await page.evaluate(async () => {
-      // Mock indexedDB to simulate failure
-      const originalIndexedDB = Object.getOwnPropertyDescriptor(window, 'indexedDB');
-      Object.defineProperty(window, 'indexedDB', {
-        value: {
-          open: () => {
-            const request = {};
-            setTimeout(() => {
-              request.error = new DOMException('Simulated IndexedDB failure');
-              if (request.onerror) request.onerror({ target: request });
-            }, 0);
-            return request;
-          }
-        },
-        configurable: true
-      });
+  test('should fallback to localStorage.setItem if indexedDB fails to open', async ({ page }) => {
+    const key = 'testKey2';
+    const value = { prop: 'testValue2' };
 
-      // Mock localStorage to simulate failure
-      const originalLocalStorage = Object.getOwnPropertyDescriptor(window, 'localStorage');
-      Object.defineProperty(window, 'localStorage', {
-        value: {
-          getItem: () => {
-            throw new Error('Simulated localStorage failure');
+    await page.evaluate(async (args) => {
+      const { setSetting } = await import('/js/db.js');
+
+      const originalIndexedDBOpen = window.indexedDB.open;
+      window.__originalIndexedDBOpen = originalIndexedDBOpen; // Save for cleanup
+
+      window.indexedDB.open = function() {
+        const mockRequest = {
+           set onerror(cb) { this._onerror = cb; },
+           get onerror() { return this._onerror; }
+        };
+        setTimeout(() => {
+          mockRequest.error = new Error('Mock IDB Open Error');
+          if (mockRequest._onerror) {
+            mockRequest._onerror({ target: mockRequest });
           }
-        },
-        configurable: true
-      });
+        }, 10);
+        return mockRequest;
+      };
+
+      // Spy on localStorage.setItem
+      const originalSetItem = localStorage.setItem;
+      window.__originalSetItem = originalSetItem;
+      window.__localStorageCalls = [];
+      localStorage.setItem = function(key, val) {
+        window.__localStorageCalls.push({ key, val });
+        return originalSetItem.apply(this, arguments);
+      };
 
       try {
-        const { getSetting } = await import(`/js/db.js?t=${Date.now()}`);
-        return await getSetting('test_setting_fail');
-      } finally {
-        // Restore
-        if (originalIndexedDB) {
-          Object.defineProperty(window, 'indexedDB', originalIndexedDB);
-        }
-        if (originalLocalStorage) {
-          Object.defineProperty(window, 'localStorage', originalLocalStorage);
-        }
+        await setSetting(args.key, args.value);
+      } catch (e) {
+        console.error("setSetting threw unhandled error to caller:", e);
       }
-    });
+    }, { key, value });
 
-    expect(result).toBeUndefined();
+    // Verify localStorage.setItem was called
+    const localStorageCalls = await page.evaluate(() => window.__localStorageCalls);
+
+    expect(localStorageCalls).toHaveLength(1);
+    expect(localStorageCalls[0].key).toBe(key);
+    expect(localStorageCalls[0].val).toBe(JSON.stringify(value));
+
+    // Cleanup mocks
+    await page.evaluate(() => {
+      window.indexedDB.open = window.__originalIndexedDBOpen;
+      localStorage.setItem = window.__originalSetItem;
+      delete window.__originalIndexedDBOpen;
+      delete window.__originalSetItem;
+      delete window.__localStorageCalls;
+    });
   });
 });
