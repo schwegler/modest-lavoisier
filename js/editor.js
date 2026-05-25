@@ -12,7 +12,7 @@ import DOMPurify from 'https://esm.sh/dompurify@3.0.9';
  * @param {string} unsafe 
  * @returns {string}
  */
-function escapeHTML(unsafe) {
+export function escapeHTML(unsafe) {
   return unsafe
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
