@@ -10,7 +10,7 @@ test.describe('extractTags', () => {
 
   async function evaluateExtractTags(page, input) {
     return await page.evaluate(async (text) => {
-      const { extractTags } = await import('/js/editor.js');
+      const { extractTags } = await new Function("return import('/js/editor.js')")();
       return extractTags(text);
     }, input);
   }

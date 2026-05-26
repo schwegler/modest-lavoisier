@@ -11,7 +11,7 @@ test.describe('setSetting fallback error handling', () => {
 
     await page.evaluate(async (args) => {
       // Import the module
-      const { setSetting } = await import('/js/db.js');
+      const { setSetting } = await new Function("return import('/js/db.js')")();
 
       const originalPut = IDBObjectStore.prototype.put;
       window.__originalPut = originalPut;
@@ -68,7 +68,7 @@ test.describe('setSetting fallback error handling', () => {
     const value = { prop: 'testValue2' };
 
     await page.evaluate(async (args) => {
-      const { setSetting } = await import('/js/db.js');
+      const { setSetting } = await new Function("return import('/js/db.js')")();
 
       const originalIndexedDBOpen = window.indexedDB.open;
       window.__originalIndexedDBOpen = originalIndexedDBOpen; // Save for cleanup

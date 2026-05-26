@@ -544,19 +544,27 @@ header.main-header {
 .toastui-editor-defaultUI {
   border: none !important;
 }
-.toastui-editor-contents {
-  font-family: var(--font-mono) !important;
-  font-size: 14px !important;
-  line-height: 1.6 !important;
-}
 .toastui-editor-defaultUI .toastui-editor-main {
-  background-color: var(--bg) !important;
+  background-color: var(--input-bg) !important;
 }
 .toastui-editor-defaultUI .toastui-editor-ww-container {
-  background-color: var(--bg) !important;
+  background-color: var(--input-bg) !important;
+  padding: 40px !important;
 }
 .toastui-editor-contents {
+  font-family: var(--font-sans) !important;
+  font-size: 15px !important;
+  line-height: 1.7 !important;
   color: var(--text) !important;
+  max-width: 720px !important;
+  margin: 0 auto !important;
+  padding: 0 !important;
+}
+.toastui-editor-defaultUI .toastui-editor-toolbar {
+  background-color: var(--input-bg) !important;
+  border-bottom: 1px solid var(--border) !important;
+  border-top-left-radius: 0 !important;
+  border-top-right-radius: 0 !important;
 }
 
 /* PREVIEW PANEL */
@@ -593,119 +601,145 @@ header.main-header {
 }
 
 .markdown-body h1,
+.toastui-editor-contents h1,
 .markdown-body h2,
+.toastui-editor-contents h2,
 .markdown-body h3,
-.markdown-body h4 {
-  font-family: var(--font-display);
+.toastui-editor-contents h3,
+.markdown-body h4,
+.toastui-editor-contents h4 {
+  font-family: var(--font-display) !important;
   font-weight: 600;
   margin-top: 24px;
   margin-bottom: 16px;
   line-height: 1.25;
 }
 
-.markdown-body h1 { font-size: 2em; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
-.markdown-body h2 { font-size: 1.5em; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
-.markdown-body h3 { font-size: 1.25em; }
+.markdown-body h1,
+.toastui-editor-contents h1 { font-size: 2em !important; border-bottom: 1px solid var(--border) !important; padding-bottom: 8px !important; }
+.markdown-body h2,
+.toastui-editor-contents h2 { font-size: 1.5em !important; border-bottom: 1px solid var(--border) !important; padding-bottom: 6px !important; }
+.markdown-body h3,
+.toastui-editor-contents h3 { font-size: 1.25em !important; }
 
-.markdown-body p {
+.markdown-body p,
+.toastui-editor-contents p {
   margin-bottom: 16px;
 }
 
-.markdown-body code {
-  font-family: var(--font-mono);
-  font-size: 85%;
-  background: var(--active-bg);
-  padding: 3px 6px;
-  border-radius: 4px;
-  border: 1px solid var(--border);
+.markdown-body code,
+.toastui-editor-contents code {
+  font-family: var(--font-mono) !important;
+  font-size: 85% !important;
+  background: var(--active-bg) !important;
+  padding: 3px 6px !important;
+  border-radius: 4px !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text) !important;
 }
 
-.markdown-body pre {
+.markdown-body pre,
+.toastui-editor-contents pre {
   margin-bottom: 16px;
   padding: 16px;
   overflow: auto;
   font-size: 85%;
   line-height: 1.45;
-  background: var(--bg);
-  border: 1px solid var(--border);
+  background: var(--bg) !important;
+  border: 1px solid var(--border) !important;
   border-radius: 8px;
 }
 
-.markdown-body pre code {
-  padding: 0;
-  background: transparent;
-  border: none;
-  font-size: 13px;
+.markdown-body pre code,
+.toastui-editor-contents pre code {
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  font-size: 13px !important;
 }
 
-.markdown-body ul, 
-.markdown-body ol {
+.markdown-body ul,
+.toastui-editor-contents ul,
+.markdown-body ol,
+.toastui-editor-contents ol {
   margin-bottom: 16px;
   padding-left: 2em;
 }
 
-.markdown-body li {
+.markdown-body li,
+.toastui-editor-contents li {
   margin-top: 4px;
 }
 
-.markdown-body blockquote {
+.markdown-body blockquote,
+.toastui-editor-contents blockquote {
   padding: 0 1em;
-  color: var(--text-muted);
-  border-left: 0.25em solid var(--accent);
+  color: var(--text-muted) !important;
+  border-left: 0.25em solid var(--accent) !important;
   margin-bottom: 16px;
+  background: transparent !important;
 }
 
-.markdown-body table {
+.markdown-body table,
+.toastui-editor-contents table {
   width: 100%;
   border-collapse: collapse;
   margin-bottom: 16px;
 }
 
-.markdown-body th, 
-.markdown-body td {
+.markdown-body th,
+.toastui-editor-contents th,
+.markdown-body td,
+.toastui-editor-contents td {
   padding: 8px 12px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border) !important;
 }
 
-.markdown-body th {
-  background: var(--active-bg);
+.markdown-body th,
+.toastui-editor-contents th {
+  background: var(--active-bg) !important;
   font-weight: 600;
 }
 
 /* LINK STYLING */
-.markdown-body a {
-  color: var(--accent);
-  text-decoration: none;
+.markdown-body a,
+.toastui-editor-contents a {
+  color: var(--accent) !important;
+  text-decoration: none !important;
   font-weight: 500;
-  border-bottom: 1.5px solid var(--accent-glow);
+  border-bottom: 1.5px solid var(--accent-glow) !important;
   transition: color var(--transition-fast), border-color var(--transition-fast), background-color var(--transition-fast);
   padding: 0px 3px;
   margin: 0px -1px;
   border-radius: 4px;
 }
 
-.markdown-body a:hover {
-  color: var(--accent-hover);
-  border-color: var(--accent);
-  background-color: var(--active-bg);
+.markdown-body a:hover,
+.toastui-editor-contents a:hover {
+  color: var(--accent-hover) !important;
+  border-color: var(--accent) !important;
+  background-color: var(--active-bg) !important;
 }
 
-.markdown-body a.wiki-link.broken {
-  color: var(--broken-link);
-  background-color: var(--broken-bg);
-  border-bottom: 1px dashed var(--broken-link);
+.markdown-body a.wiki-link.broken,
+.toastui-editor-contents a.wiki-link.broken {
+  color: var(--broken-link) !important;
+  background-color: var(--broken-bg) !important;
+  border-bottom: 1px dashed var(--broken-link) !important;
   padding: 1px 4px;
   margin: 0;
   border-radius: 4px;
 }
 
-.markdown-body a.wiki-link.broken:hover {
-  color: var(--broken-link);
-  background-color: rgba(220, 38, 38, 0.12);
-  border-color: var(--broken-link);
+.markdown-body a.wiki-link.broken:hover,
+.toastui-editor-contents a.wiki-link.broken:hover {
+  color: var(--broken-link) !important;
+  background-color: rgba(220, 38, 38, 0.12) !important;
+  border-color: var(--broken-link) !important;
 }
 
-.markdown-body a.wiki-link.broken:after {
+.markdown-body a.wiki-link.broken:after,
+.toastui-editor-contents a.wiki-link.broken:after {
   content: ' ↗';
   font-size: 9px;
   vertical-align: super;

@@ -514,9 +514,12 @@ class NativeNodesApp {
         return;
       }
 
-      const handle = await window.showDirectoryPicker({
-        mode: 'readwrite'
-      });
+      const handle = await window.showDirectoryPicker();
+      const permission = await handle.requestPermission({ mode: 'readwrite' });
+      if (permission !== 'granted') {
+        alert('Permission is required to write changes to local workspace.');
+        return;
+      }
       
       this.isSandbox = false;
       this.dirHandle = handle;
