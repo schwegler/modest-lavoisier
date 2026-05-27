@@ -55,3 +55,6 @@ playwright/.cache/
 
 pr-*
 pr_*
+# Tauri
+src-tauri/target/
+src-tauri/gen/schemas
