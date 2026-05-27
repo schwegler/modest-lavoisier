@@ -175,6 +175,24 @@
           </button>
         </div>
       </header>
+      
+      <!-- Tags Bar -->
+      <div id="tagsBar" class="tags-bar glass">
+        <div class="tags-label">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+            <line x1="7" y1="7" x2="7.01" y2="7"></line>
+          </svg>
+          <span>Tags</span>
+        </div>
+        <div id="tagEditorContainer" class="tag-editor-container">
+          <div id="tagPillsList" class="tag-pills-list"></div>
+          <div class="tag-input-wrapper">
+            <input type="text" id="tagInputField" placeholder="Add tag..." autocomplete="off">
+            <div id="tagAutocompleteDropdown" class="tag-autocomplete-dropdown" style="display: none;"></div>
+          </div>
+        </div>
+      </div>
 
       <!-- Workspace Dual Panel -->
       <div id="workspacePanels" class="workspace-panels">

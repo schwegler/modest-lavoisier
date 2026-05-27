@@ -87,7 +87,10 @@ class NativeNodesApp {
       activeTagFilterIndicator: document.getElementById('activeTagFilterIndicator'),
       activeTagFilterName: document.getElementById('activeTagFilterName'),
       helpModalBtn: document.getElementById('helpModalBtn'),
-      helpModal: document.getElementById('helpModal')
+      helpModal: document.getElementById('helpModal'),
+      tagInputField: document.getElementById('tagInputField'),
+      tagPillsList: document.getElementById('tagPillsList'),
+      tagAutocompleteDropdown: document.getElementById('tagAutocompleteDropdown')
     };
 
 
@@ -459,6 +462,9 @@ class NativeNodesApp {
 
     // Hash Router Listener
     window.addEventListener('hashchange', () => this.handleRouting());
+
+    // Init tag input listeners
+    this.setupTagEditor();
   }
 
   /**
@@ -941,9 +947,12 @@ class NativeNodesApp {
 
     this.activePage = page;
 
-    // Load editor text
-    this.editor.setMarkdown(page.content);
+    // Load editor text (hide frontmatter block in editor)
+    this.editor.setMarkdown(stripFrontmatter(page.content));
     this.dom.activeNoteTitle.textContent = page.name;
+
+    // Render tag chips in tags bar
+    this.renderTagBarChips();
 
     // Mark as clean initially
     this.markAsClean();
@@ -975,7 +984,7 @@ class NativeNodesApp {
     // Pass the pages Map directly to avoid expensive Set creation on every render
     const html = renderMarkdown(text, this.pages);
     
-    const tags = extractTags(text);
+    const tags = this.activePage.tags || [];
     let tagsHTML = '';
     if (tags && tags.length > 0) {
       tagsHTML = `<div class="preview-tags-container">` +
@@ -1032,13 +1041,21 @@ class NativeNodesApp {
   async saveActivePageSync() {
     if (!this.activePage || !this.isDirty) return;
     
-    const newContent = this.editor.getMarkdown();
-    this.activePage.content = newContent;
-    this.activePage.tags = extractTags(newContent);
-
+    const editorMarkdown = this.editor.getMarkdown();
+    const tagsList = this.activePage.tags || [];
+    
+    // Reconstruct frontmatter and prepend to markdown
+    const frontmatter = tagsList.length > 0 ? `---\ntags: [${tagsList.join(', ')}]\n---\n` : `---\ntags: []\n---\n`;
+    const fullContent = frontmatter + editorMarkdown;
+    
+    this.activePage.content = fullContent;
+    
     // Update in Map
-    this.pages.get(this.activePage.name.toLowerCase()).content = newContent;
-    this.pages.get(this.activePage.name.toLowerCase()).tags = this.activePage.tags;
+    const pageInMap = this.pages.get(this.activePage.name.toLowerCase());
+    if (pageInMap) {
+      pageInMap.content = fullContent;
+      pageInMap.tags = tagsList;
+    }
 
     if (this.isSandbox) {
       // In sandbox mode, it resides only in memory
@@ -1048,18 +1065,17 @@ class NativeNodesApp {
       return;
     }
 
-
     try {
       // Write file changes back to local hard drive
       const handle = this.activePage.handle;
       if (handle) {
         if (typeof handle === 'string' && this.isTauri) {
           // Tauri mode — write via fs plugin
-          await window.__TAURI__.fs.writeTextFile(handle, newContent);
+          await window.__TAURI__.fs.writeTextFile(handle, fullContent);
         } else {
           // Web API mode
           const writable = await handle.createWritable();
-          await writable.write(newContent);
+          await writable.write(fullContent);
           await writable.close();
         }
         
@@ -1068,7 +1084,6 @@ class NativeNodesApp {
         this.updateGraph();
       }
     } catch (err) {
-
       console.error('Failed to write changes directly to disk:', err);
       // Fallback: Notify user
       this.dom.saveStatus.className = 'save-indicator dirty';
@@ -1360,6 +1375,186 @@ class NativeNodesApp {
     
     this.renderFileList();
     this.renderTagList();
+  }
+
+  /**
+   * Renders tag chips in the tags bar.
+   */
+  renderTagBarChips() {
+    if (!this.activePage) return;
+    const tagsList = this.activePage.tags || [];
+    this.dom.tagPillsList.innerHTML = '';
+    
+    tagsList.forEach((tag) => {
+      const chip = document.createElement('div');
+      chip.className = 'tag-chip';
+      
+      const span = document.createElement('span');
+      span.textContent = `#${tag}`;
+      chip.appendChild(span);
+      
+      const btn = document.createElement('button');
+      btn.className = 'delete-tag-btn';
+      btn.innerHTML = '&times;';
+      btn.title = `Remove tag ${tag}`;
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.removeTag(tag);
+      });
+      chip.appendChild(btn);
+      
+      this.dom.tagPillsList.appendChild(chip);
+    });
+  }
+
+  /**
+   * Adds a tag to the active note.
+   */
+  addTag(tag) {
+    if (!this.activePage) return;
+    const cleanTag = tag.trim().toLowerCase().replace(/[#\s,]/g, '');
+    if (!cleanTag) return;
+    
+    if (!this.activePage.tags) {
+      this.activePage.tags = [];
+    }
+    
+    if (!this.activePage.tags.includes(cleanTag)) {
+      this.activePage.tags.push(cleanTag);
+      this.markAsDirty();
+      this.renderTagBarChips();
+      this.renderTagList(); // Update sidebar tags list
+      this.triggerAutoSave();
+    }
+    
+    this.dom.tagInputField.value = '';
+    this.hideAutocomplete();
+  }
+
+  /**
+   * Removes a tag from the active note.
+   */
+  removeTag(tag) {
+    if (!this.activePage || !this.activePage.tags) return;
+    
+    const idx = this.activePage.tags.indexOf(tag);
+    if (idx !== -1) {
+      this.activePage.tags.splice(idx, 1);
+      this.markAsDirty();
+      this.renderTagBarChips();
+      this.renderTagList(); // Update sidebar tags list
+      this.triggerAutoSave();
+    }
+  }
+
+  /**
+   * Compiles all unique tags present in the workspace.
+   */
+  getWorkspaceTags() {
+    const allTags = new Set();
+    for (const page of this.pages.values()) {
+      if (page.tags) {
+        page.tags.forEach(t => allTags.add(t.toLowerCase()));
+      }
+    }
+    return Array.from(allTags).sort();
+  }
+
+  /**
+   * Initializes event listeners for the tag editor input.
+   */
+  setupTagEditor() {
+    const input = this.dom.tagInputField;
+    const dropdown = this.dom.tagAutocompleteDropdown;
+    
+    let activeSuggestionIndex = -1;
+    
+    input.addEventListener('input', () => {
+      const query = input.value.trim().toLowerCase().replace(/#/g, '');
+      if (!query) {
+        this.hideAutocomplete();
+        return;
+      }
+      
+      const workspaceTags = this.getWorkspaceTags();
+      const activeTags = this.activePage ? (this.activePage.tags || []) : [];
+      
+      // Filter out tags already added to the note
+      const filtered = workspaceTags.filter(t => t.includes(query) && !activeTags.includes(t));
+      
+      if (filtered.length > 0) {
+        this.showAutocomplete(filtered);
+      } else {
+        this.hideAutocomplete();
+      }
+      activeSuggestionIndex = -1;
+    });
+    
+    input.addEventListener('keydown', (e) => {
+      const items = dropdown.querySelectorAll('.autocomplete-item');
+      
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (activeSuggestionIndex >= 0 && activeSuggestionIndex < items.length) {
+          const selectedTag = items[activeSuggestionIndex].getAttribute('data-tag');
+          this.addTag(selectedTag);
+        } else {
+          this.addTag(input.value);
+        }
+      } else if (e.key === 'Backspace' && !input.value && this.activePage && this.activePage.tags && this.activePage.tags.length > 0) {
+        // Backspace on empty input removes the last tag
+        const lastTag = this.activePage.tags[this.activePage.tags.length - 1];
+        this.removeTag(lastTag);
+      } else if (e.key === 'ArrowDown' && dropdown.style.display !== 'none') {
+        e.preventDefault();
+        activeSuggestionIndex = (activeSuggestionIndex + 1) % items.length;
+        this.highlightSuggestion(items, activeSuggestionIndex);
+      } else if (e.key === 'ArrowUp' && dropdown.style.display !== 'none') {
+        e.preventDefault();
+        activeSuggestionIndex = (activeSuggestionIndex - 1 + items.length) % items.length;
+        this.highlightSuggestion(items, activeSuggestionIndex);
+      } else if (e.key === 'Escape') {
+        this.hideAutocomplete();
+      }
+    });
+    
+    // Hide autocomplete when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!this.dom.tagInputField.contains(e.target) && !dropdown.contains(e.target)) {
+        this.hideAutocomplete();
+      }
+    });
+  }
+
+  highlightSuggestion(items, index) {
+    items.forEach((item, idx) => {
+      item.classList.toggle('active', idx === index);
+      if (idx === index) {
+        item.scrollIntoView({ block: 'nearest' });
+      }
+    });
+  }
+
+  showAutocomplete(tags) {
+    const dropdown = this.dom.tagAutocompleteDropdown;
+    dropdown.innerHTML = '';
+    dropdown.style.display = 'block';
+    
+    tags.forEach(tag => {
+      const item = document.createElement('div');
+      item.className = 'autocomplete-item';
+      item.textContent = tag;
+      item.setAttribute('data-tag', tag);
+      item.addEventListener('click', () => {
+        this.addTag(tag);
+      });
+      dropdown.appendChild(item);
+    });
+  }
+
+  hideAutocomplete() {
+    this.dom.tagAutocompleteDropdown.style.display = 'none';
+    this.dom.tagAutocompleteDropdown.innerHTML = '';
   }
 }
 
