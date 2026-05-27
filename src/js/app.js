@@ -102,6 +102,10 @@ class NativeNodesApp {
       onChange: () => {
         this.markAsDirty();
         this.triggerAutoSave();
+      },
+      onWikiLinkClick: (pageName) => {
+        const resolved = this.resolveWikiLink(pageName);
+        window.location.hash = `#/page/${encodeURIComponent(resolved)}`;
       }
     });
 

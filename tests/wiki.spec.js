@@ -97,6 +97,9 @@ test.describe('Native Nodes Web App Tests', () => {
   test('should support flat namespace wiki links and folder collapse-all', async ({ page }) => {
     await page.click('#demoWorkspaceBtn');
 
+    // Toggle layout to preview mode so we can click preview links
+    await page.click('#layoutToggleBtn');
+
     // 1. Navigate via cased link from Welcome to Tutorial note
     await page.click('a[data-page="Tutorial"]');
     await expect(page.locator('#activeNoteTitle')).toHaveText('Tutorial');
@@ -205,6 +208,9 @@ test.describe('Native Nodes Web App Tests', () => {
 
   test('should support creating a new note by clicking a broken wiki link', async ({ page }) => {
     await page.click('#demoWorkspaceBtn');
+
+    // Toggle layout to preview mode so we can click preview links
+    await page.click('#layoutToggleBtn');
 
     // Set up a listener for the confirm dialog and accept it
     page.once('dialog', async dialog => {

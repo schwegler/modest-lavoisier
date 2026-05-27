@@ -9,8 +9,16 @@ import { closeBrackets, closeBracketsKeymap } from 'https://esm.sh/@codemirror/a
 // Styles to apply to hidden markdown markup elements
 const hiddenMarkerDecoration = Decoration.mark({ class: 'cm-hidden-marker' });
 
-// Styles to apply to wiki link labels
-const wikiLinkLabelDecoration = Decoration.mark({ class: 'cm-live-link' });
+// Styles to apply to wiki link labels dynamically with page name attributes
+function getWikiLinkDecoration(pageName) {
+  return Decoration.mark({
+    attributes: {
+      class: 'cm-live-link',
+      'data-page': pageName,
+      title: `Cmd/Ctrl+Click to open ${pageName}`
+    }
+  });
+}
 
 /**
  * CodeMirror 6 ViewPlugin that dynamically hides markdown syntax markers
@@ -137,25 +145,31 @@ const livePreviewPlugin = ViewPlugin.fromClass(class {
 
           const innerText = match[1];
           const pipeIndex = innerText.indexOf('|');
+          const pageTarget = pipeIndex !== -1 ? innerText.substring(0, pipeIndex).trim() : innerText.trim();
+          const wikiLinkDeco = getWikiLinkDecoration(pageTarget);
+
           if (pipeIndex !== -1) {
             // Hide "Page Name|"
             const pipePos = matchStart + 2 + pipeIndex;
             builder.push(hiddenMarkerDecoration.range(matchStart + 2, pipePos + 1));
             // Style "Label" as a link
-            builder.push(wikiLinkLabelDecoration.range(pipePos + 1, matchEnd - 2));
+            builder.push(wikiLinkDeco.range(pipePos + 1, matchEnd - 2));
           } else {
             // Style "Page Name" as a link
-            builder.push(wikiLinkLabelDecoration.range(matchStart + 2, matchEnd - 2));
+            builder.push(wikiLinkDeco.range(matchStart + 2, matchEnd - 2));
           }
         } else {
           // Cursor is inside. We still style it as a link for clarity
           const innerText = match[1];
           const pipeIndex = innerText.indexOf('|');
+          const pageTarget = pipeIndex !== -1 ? innerText.substring(0, pipeIndex).trim() : innerText.trim();
+          const wikiLinkDeco = getWikiLinkDecoration(pageTarget);
+
           if (pipeIndex !== -1) {
             const pipePos = matchStart + 2 + pipeIndex;
-            builder.push(wikiLinkLabelDecoration.range(pipePos + 1, matchEnd - 2));
+            builder.push(wikiLinkDeco.range(pipePos + 1, matchEnd - 2));
           } else {
-            builder.push(wikiLinkLabelDecoration.range(matchStart + 2, matchEnd - 2));
+            builder.push(wikiLinkDeco.range(matchStart + 2, matchEnd - 2));
           }
         }
       }
@@ -184,8 +198,9 @@ const customHighlightStyle = HighlightStyle.define([
 ]);
 
 export class CodeMirrorEditor {
-  constructor({ el, initialValue = '', onChange, theme = 'dracula' }) {
+  constructor({ el, initialValue = '', onChange, onWikiLinkClick, theme = 'dracula' }) {
     this.onChange = onChange;
+    this.onWikiLinkClick = onWikiLinkClick;
     this.themeConfig = new Compartment();
 
     const state = EditorState.create({
@@ -208,6 +223,22 @@ export class CodeMirrorEditor {
         EditorView.updateListener.of(update => {
           if (update.docChanged && this.onChange) {
             this.onChange();
+          }
+        }),
+        EditorView.domEventHandlers({
+          click: (event, view) => {
+            const target = event.target;
+            if (target && target.classList.contains('cm-live-link')) {
+              const isCmdOrCtrl = event.metaKey || event.ctrlKey;
+              if (isCmdOrCtrl && this.onWikiLinkClick) {
+                const pageTarget = target.getAttribute('data-page');
+                if (pageTarget) {
+                  event.preventDefault();
+                  this.onWikiLinkClick(pageTarget);
+                  return true;
+                }
+              }
+            }
           }
         }),
         this.themeConfig.of(this.getEditorTheme(theme))
