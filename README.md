@@ -4,7 +4,7 @@ Offline-capable local Markdown Wiki note-taking desktop application. A beautiful
 
 ## Features
 
-- **Local Directory Sync:** Edits save automatically to your hard drive files using browser File APIs.
+- **Local Directory Sync:** Edits save automatically to your hard drive files using native filesystem access.
 - **Double-bracket Wiki Linking:** Write `[[Page Name]]` to instantly link pages. Broken links allow quick creation.
 - **Interactive Connection Graph:** Drift and navigate through a physics-based visual network of notes.
 - **Light/Dark Theme:** Switchable themes with `Cmd+I` shortcut.
@@ -32,7 +32,7 @@ npm install
 Start the application locally in development mode:
 
 ```bash
-npm start
+npm run tauri dev
 ```
 
 ### Building the App
@@ -40,7 +40,7 @@ npm start
 Build and package the application for distribution using Tauri:
 
 ```bash
-npm run build
+npm run tauri build
 ```
 
 The packaged applications will be output to the `src-tauri/target/release/bundle/` directory.
