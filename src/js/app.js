@@ -1640,7 +1640,7 @@ class NativeNodesApp {
     input.addEventListener('keydown', (e) => {
       const items = dropdown.querySelectorAll('.autocomplete-item');
       
-      if (e.key === 'Enter') {
+      if (e.key === 'Enter' || e.key === ',') {
         e.preventDefault();
         if (activeSuggestionIndex >= 0 && activeSuggestionIndex < items.length) {
           const selectedTag = items[activeSuggestionIndex].getAttribute('data-tag');
@@ -1892,13 +1892,13 @@ class NativeNodesApp {
             await fs.mkdir(folderFullPath, { recursive: true });
           }
           const newFullPath = `${this.dirHandle.path}/${newName}.md`;
-          await fs.writeTextFile(newFullPath, content);
-          handleOrPath = newFullPath;
-          
           const oldFullPath = this.activePage.handle;
           if (oldFullPath) {
-            await fs.removeFile(oldFullPath);
+            await fs.rename(oldFullPath, newFullPath);
+          } else {
+            await fs.writeTextFile(newFullPath, content);
           }
+          handleOrPath = newFullPath;
         } else {
           let currentDir = this.dirHandle;
           for (const folderName of newFolderParts) {
