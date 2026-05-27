@@ -54,7 +54,7 @@ const livePreviewPlugin = ViewPlugin.fromClass(class {
               let child = node.firstChild;
               while (child) {
                 if (child.name === 'EmphasisMark') {
-                  builder.push({ from: child.from, to: child.to, value: hiddenMarkerDecoration });
+                  builder.push(hiddenMarkerDecoration.range(child.from, child.to));
                 }
                 child = child.nextSibling;
               }
@@ -67,7 +67,7 @@ const livePreviewPlugin = ViewPlugin.fromClass(class {
               let child = node.firstChild;
               while (child) {
                 if (child.name === 'EmphasisMark') {
-                  builder.push({ from: child.from, to: child.to, value: hiddenMarkerDecoration });
+                  builder.push(hiddenMarkerDecoration.range(child.from, child.to));
                 }
                 child = child.nextSibling;
               }
@@ -80,7 +80,7 @@ const livePreviewPlugin = ViewPlugin.fromClass(class {
               let child = node.firstChild;
               while (child) {
                 if (child.name === 'CodeMark') {
-                  builder.push({ from: child.from, to: child.to, value: hiddenMarkerDecoration });
+                  builder.push(hiddenMarkerDecoration.range(child.from, child.to));
                 }
                 child = child.nextSibling;
               }
@@ -93,7 +93,7 @@ const livePreviewPlugin = ViewPlugin.fromClass(class {
               let child = node.firstChild;
               while (child) {
                 if (child.name === 'HeaderMark') {
-                  builder.push({ from: child.from, to: child.to, value: hiddenMarkerDecoration });
+                  builder.push(hiddenMarkerDecoration.range(child.from, child.to));
                 }
                 child = child.nextSibling;
               }
@@ -108,10 +108,10 @@ const livePreviewPlugin = ViewPlugin.fromClass(class {
                 if (child.name === 'LinkMark') {
                   const text = view.state.sliceDoc(child.from, child.to);
                   if (text === '[' || text === ']') {
-                    builder.push({ from: child.from, to: child.to, value: hiddenMarkerDecoration });
+                    builder.push(hiddenMarkerDecoration.range(child.from, child.to));
                   } else if (text === '(') {
                     // Hide the entire (...) block (including URL and close parenthesis)
-                    builder.push({ from: child.from, to: node.to, value: hiddenMarkerDecoration });
+                    builder.push(hiddenMarkerDecoration.range(child.from, node.to));
                   }
                 }
                 child = child.nextSibling;
@@ -132,20 +132,20 @@ const livePreviewPlugin = ViewPlugin.fromClass(class {
 
         if (!isCursorInside) {
           // Hide [[ and ]]
-          builder.push({ from: matchStart, to: matchStart + 2, value: hiddenMarkerDecoration });
-          builder.push({ from: matchEnd - 2, to: matchEnd, value: hiddenMarkerDecoration });
+          builder.push(hiddenMarkerDecoration.range(matchStart, matchStart + 2));
+          builder.push(hiddenMarkerDecoration.range(matchEnd - 2, matchEnd));
 
           const innerText = match[1];
           const pipeIndex = innerText.indexOf('|');
           if (pipeIndex !== -1) {
             // Hide "Page Name|"
             const pipePos = matchStart + 2 + pipeIndex;
-            builder.push({ from: matchStart + 2, to: pipePos + 1, value: hiddenMarkerDecoration });
+            builder.push(hiddenMarkerDecoration.range(matchStart + 2, pipePos + 1));
             // Style "Label" as a link
-            builder.push({ from: pipePos + 1, to: matchEnd - 2, value: wikiLinkLabelDecoration });
+            builder.push(wikiLinkLabelDecoration.range(pipePos + 1, matchEnd - 2));
           } else {
             // Style "Page Name" as a link
-            builder.push({ from: matchStart + 2, to: matchEnd - 2, value: wikiLinkLabelDecoration });
+            builder.push(wikiLinkLabelDecoration.range(matchStart + 2, matchEnd - 2));
           }
         } else {
           // Cursor is inside. We still style it as a link for clarity
@@ -153,9 +153,9 @@ const livePreviewPlugin = ViewPlugin.fromClass(class {
           const pipeIndex = innerText.indexOf('|');
           if (pipeIndex !== -1) {
             const pipePos = matchStart + 2 + pipeIndex;
-            builder.push({ from: pipePos + 1, to: matchEnd - 2, value: wikiLinkLabelDecoration });
+            builder.push(wikiLinkLabelDecoration.range(pipePos + 1, matchEnd - 2));
           } else {
-            builder.push({ from: matchStart + 2, to: matchEnd - 2, value: wikiLinkLabelDecoration });
+            builder.push(wikiLinkLabelDecoration.range(matchStart + 2, matchEnd - 2));
           }
         }
       }
@@ -204,6 +204,7 @@ export class CodeMirrorEditor {
         markdown(),
         syntaxHighlighting(customHighlightStyle, { fallback: true }),
         livePreviewPlugin,
+        EditorView.lineWrapping,
         EditorView.updateListener.of(update => {
           if (update.docChanged && this.onChange) {
             this.onChange();

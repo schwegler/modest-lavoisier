@@ -10,7 +10,6 @@ import { getSetting, setSetting, deleteSetting } from './db.js';
 import { renderMarkdown, extractWikiLinks, extractTags, stripFrontmatter, escapeHTML, parseFrontmatter, stringifyFrontmatter } from './editor.js';
 import { CodeMirrorEditor } from './codemirror-editor.js';
 import { WikiGraph } from './graph.js';
-import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.esm.min.mjs';
 
 class NativeNodesApp {
   constructor() {
@@ -414,6 +413,83 @@ class NativeNodesApp {
     // Initialize Theme Picker
     this.populateThemePicker();
 
+    // Collapsible Properties Panel Header listener
+    this.dom.propertiesHeader.addEventListener('click', () => {
+      const collapsed = this.dom.propertiesContainer.classList.contains('collapsed');
+      this.dom.propertiesContainer.classList.toggle('collapsed', !collapsed);
+      setSetting('propertiesCollapsed', !collapsed);
+    });
+
+    // Properties Add property button listener
+    this.dom.addPropertyBtn.addEventListener('click', () => {
+      if (!this.activePage) return;
+      if (!this.activePage.fields) this.activePage.fields = {};
+      
+      let fieldName = 'property';
+      let counter = 1;
+      while (fieldName in this.activePage.fields || fieldName === 'tags') {
+        fieldName = `property${counter}`;
+        counter++;
+      }
+      
+      this.activePage.fields[fieldName] = '';
+      this.markAsDirty();
+      this.triggerAutoSave();
+      this.renderProperties();
+      
+      setTimeout(() => {
+        const keyInputs = this.dom.propertiesList.querySelectorAll('.property-key');
+        if (keyInputs.length > 0) {
+          const lastInput = keyInputs[keyInputs.length - 1];
+          lastInput.focus();
+          lastInput.select();
+        }
+      }, 50);
+    });
+
+    // Title Click-to-rename listener
+    this.dom.activeNoteTitle.addEventListener('click', () => {
+      if (!this.activePage) return;
+      this.dom.activeNoteTitle.style.display = 'none';
+      this.dom.activeNoteTitleInput.style.display = 'block';
+      this.dom.activeNoteTitleInput.value = this.activePage.name;
+      this.dom.activeNoteTitleInput.focus();
+      
+      const name = this.activePage.name;
+      const lastSlash = name.lastIndexOf('/');
+      if (lastSlash !== -1) {
+        this.dom.activeNoteTitleInput.setSelectionRange(lastSlash + 1, name.length);
+      } else {
+        this.dom.activeNoteTitleInput.select();
+      }
+    });
+
+    const finishTitleEdit = () => {
+      if (this.dom.activeNoteTitleInput.style.display === 'block') {
+        const newTitle = this.dom.activeNoteTitleInput.value.trim();
+        this.dom.activeNoteTitleInput.style.display = 'none';
+        this.dom.activeNoteTitle.style.display = 'block';
+        if (newTitle && newTitle !== this.activePage.name) {
+          this.renameActivePage(newTitle);
+        }
+      }
+    };
+
+    this.dom.activeNoteTitleInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        finishTitleEdit();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        this.dom.activeNoteTitleInput.style.display = 'none';
+        this.dom.activeNoteTitle.style.display = 'block';
+      }
+    });
+
+    this.dom.activeNoteTitleInput.addEventListener('blur', () => {
+      finishTitleEdit();
+    });
+
     document.querySelectorAll('[data-close]').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const dialog = e.target.closest('dialog');
@@ -518,8 +594,11 @@ class NativeNodesApp {
         }
       }
     } else {
-      // Load first page in workspace by default
-      if (this.pages.size > 0) {
+      // Load last opened page if it exists and still in workspace, otherwise load first page by default
+      const lastPage = await getSetting('lastOpenedPage');
+      if (lastPage && this.pages.has(lastPage.toLowerCase())) {
+        window.location.hash = `#/page/${encodeURIComponent(lastPage)}`;
+      } else if (this.pages.size > 0) {
         const firstPage = Array.from(this.pages.values())[0].name;
         window.location.hash = `#/page/${encodeURIComponent(firstPage)}`;
       }
@@ -977,6 +1056,7 @@ class NativeNodesApp {
     if (!page) return;
 
     this.activePage = page;
+    setSetting('lastOpenedPage', page.name);
 
     // Load editor text (hide frontmatter block in editor)
     this.editor.setMarkdown(stripFrontmatter(page.content));
@@ -1851,6 +1931,7 @@ class NativeNodesApp {
       }
       
       this.activePage = this.pages.get(newKey);
+      setSetting('lastOpenedPage', newName);
       this.dom.activeNoteTitle.textContent = newName;
       this.renderFileList();
       this.updateGraph();

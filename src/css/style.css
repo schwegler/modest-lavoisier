@@ -416,7 +416,6 @@ aside.sidebar {
   font-size: 14px;
   color: var(--text-muted);
   transition: color var(--transition-fast), background var(--transition-fast);
-  border-left: 2px solid transparent;
   user-select: none;
 }
 
@@ -428,7 +427,6 @@ aside.sidebar {
 .file-item.active {
   color: var(--accent);
   background: var(--active-bg);
-  border-left-color: var(--accent);
   font-weight: 500;
 }
 
