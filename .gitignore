@@ -55,3 +55,8 @@ playwright/.cache/
 
 pr-*
 pr_*
+
+# Tauri / Rust build targets
+src-tauri/target/
+src-tauri/gen/android/
+src-tauri/gen/ios/
