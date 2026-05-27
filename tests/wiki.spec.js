@@ -52,28 +52,26 @@ test.describe('Native Nodes Web App Tests', () => {
   test('should handle layout switches and dark/light themes', async ({ page }) => {
     await page.click('#demoWorkspaceBtn');
 
-    // 1. Theme toggle verification
+    // 1. Theme picker dropdown verification
     const html = page.locator('html');
-    const initialTheme = await html.getAttribute('data-theme');
-    expect(['light', 'dark']).toContain(initialTheme);
-    
-    await page.click('#themeToggleBtn');
-    const expectedTheme = initialTheme === 'dark' ? 'light' : 'dark';
-    await expect(html).toHaveAttribute('data-theme', expectedTheme);
+    await page.click('#themePickerBtn');
+    await page.waitForSelector('#themeDropdownMenu', { state: 'visible' });
+    await page.click('#themeDropdownMenu .dropdown-item[data-theme-id="onedark"]');
+    await expect(html).toHaveAttribute('data-theme', 'onedark');
 
     // 2. Layout panel toggling
     const panels = page.locator('#workspacePanels');
-    await expect(panels).not.toHaveClass(/edit-only/);
-    await expect(panels).not.toHaveClass(/preview-only/);
     
-    await page.click('#layoutEditBtn');
+    // Check initial layout (defaults to edit-only)
     await expect(panels).toHaveClass(/edit-only/);
     
-    await page.click('#layoutPreviewBtn');
+    // Toggle to preview-only
+    await page.click('#layoutToggleBtn');
     await expect(panels).toHaveClass(/preview-only/);
-
-    await page.click('#layoutSplitBtn');
-    await expect(panels).toHaveClass(/split-only/);
+    
+    // Toggle back to edit-only
+    await page.click('#layoutToggleBtn');
+    await expect(panels).toHaveClass(/edit-only/);
   });
 
   test('should support note editing, previewing, and autosaving', async ({ page }) => {
@@ -98,6 +96,9 @@ test.describe('Native Nodes Web App Tests', () => {
 
   test('should support flat namespace wiki links and folder collapse-all', async ({ page }) => {
     await page.click('#demoWorkspaceBtn');
+
+    // Toggle layout to preview mode so we can click preview links
+    await page.click('#layoutToggleBtn');
 
     // 1. Navigate via cased link from Welcome to Tutorial note
     await page.click('a[data-page="Tutorial"]');
@@ -208,6 +209,9 @@ test.describe('Native Nodes Web App Tests', () => {
   test('should support creating a new note by clicking a broken wiki link', async ({ page }) => {
     await page.click('#demoWorkspaceBtn');
 
+    // Toggle layout to preview mode so we can click preview links
+    await page.click('#layoutToggleBtn');
+
     // Set up a listener for the confirm dialog and accept it
     page.once('dialog', async dialog => {
       expect(dialog.message()).toContain('The page "Create Me" does not exist');
@@ -228,7 +232,7 @@ test.describe('Native Nodes Web App Tests', () => {
   test('should support keyboard shortcuts', async ({ page }) => {
     await page.click('#demoWorkspaceBtn');
 
-    // Alt+L cycles layouts
+    // Alt+L toggles layouts
     const panels = page.locator('#workspacePanels');
 
     await page.keyboard.press('Alt+l');
@@ -239,18 +243,14 @@ test.describe('Native Nodes Web App Tests', () => {
     await page.waitForTimeout(500);
     await expect(panels).toHaveClass(/edit-only/);
 
-    await page.keyboard.press('Alt+l');
-    await page.waitForTimeout(500);
-    await expect(panels).toHaveClass(/split-only/);
-
-    // Theme toggle via Control+i (or Cmd+i)
+    // Theme cycle via Control+i (or Cmd+i)
     const html = page.locator('html');
     const initialTheme = await html.getAttribute('data-theme');
     
     // We send Control+i since our handler accepts e.metaKey || e.ctrlKey
     await page.keyboard.press('Control+i');
-    const expectedTheme = initialTheme === 'dark' ? 'light' : 'dark';
-    await expect(html).toHaveAttribute('data-theme', expectedTheme);
+    const newTheme = await html.getAttribute('data-theme');
+    expect(newTheme).not.toBe(initialTheme);
 
     // Search focus shortcut: Control+f (or Cmd+f)
     await page.keyboard.press('Control+f');
