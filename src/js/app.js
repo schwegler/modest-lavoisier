@@ -506,6 +506,7 @@ class NativeNodesApp {
         const folderPath = await window.__TAURI__.dialog.open({
           directory: true,
           multiple: false,
+          recursive: true,
           title: 'Select Workspace Folder'
         });
         if (folderPath) {
