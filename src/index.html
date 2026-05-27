@@ -22,7 +22,7 @@
   <div id="appShell" class="app-container" style="display: none;">
     <!-- Sidebar -->
     <aside id="sidebar" class="sidebar glass">
-      <div class="sidebar-header">
+      <div class="sidebar-header" data-tauri-drag-region>
         <svg class="logo-icon" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
           <circle cx="256" cy="256" r="180" stroke="currentColor" stroke-width="8" stroke-dasharray="16 16" opacity="0.3" />
           <line x1="200" y1="290" x2="270" y2="210" stroke="#6366f1" stroke-width="24" stroke-linecap="round" />
@@ -100,7 +100,7 @@
     <!-- Main Workspace Content -->
     <main class="main-content">
       <!-- Header -->
-      <header class="main-header glass">
+      <header class="main-header glass" data-tauri-drag-region>
         <div class="header-left">
           <button id="menuToggleBtn" class="menu-toggle-btn" title="Toggle Sidebar">
             <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -217,7 +217,7 @@
   </div>
 
   <!-- Landing / Welcome Page (Shown if no folder picked) -->
-  <div id="welcomeShell" class="empty-state-container">
+  <div id="welcomeShell" class="empty-state-container" data-tauri-drag-region>
     <div class="welcome-card glass">
       <div class="welcome-logo">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">

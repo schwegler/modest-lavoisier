@@ -1171,17 +1171,17 @@ dialog.modal::backdrop {
   transform: translateY(-1px);
 }
 
-/* Electron Desktop Window Overrides */
-.electron-window.electron-mac header.main-header {
+/* Tauri Desktop Window Overrides */
+.tauri-window.tauri-mac header.main-header {
   padding-left: 80px; /* Leave space for macOS traffic light control buttons */
   -webkit-app-region: drag;
   user-select: none;
 }
 
-.electron-window.electron-mac header.main-header button,
-.electron-window.electron-mac header.main-header .toolbar-btn-group,
-.electron-window.electron-mac header.main-header input,
-.electron-window.electron-mac header.main-header a,
-.electron-window.electron-mac header.main-header .save-indicator {
+.tauri-window.tauri-mac header.main-header button,
+.tauri-window.tauri-mac header.main-header .toolbar-btn-group,
+.tauri-window.tauri-mac header.main-header input,
+.tauri-window.tauri-mac header.main-header a,
+.tauri-window.tauri-mac header.main-header .save-indicator {
   -webkit-app-region: no-drag;
 }

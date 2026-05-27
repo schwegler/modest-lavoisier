@@ -26,15 +26,15 @@ class NativeNodesApp {
     this.selectedTag = null;
     this.saveTimeout = null;
 
-    // Check if running in Electron environment
-    this.isElectron = navigator.userAgent.toLowerCase().includes('electron');
-    if (this.isElectron) {
-      document.body.classList.add('electron-window');
+    // Check if running in Tauri desktop environment
+    this.isTauri = !!(window.__TAURI__);
+    if (this.isTauri) {
+      document.body.classList.add('tauri-window');
       const isMac = navigator.userAgent.toLowerCase().includes('macintosh') || navigator.userAgent.toLowerCase().includes('mac os x');
       if (isMac) {
-        document.body.classList.add('electron-mac');
+        document.body.classList.add('tauri-mac');
       } else {
-        document.body.classList.add('electron-non-mac');
+        document.body.classList.add('tauri-non-mac');
       }
     }
 
@@ -134,17 +134,18 @@ class NativeNodesApp {
    */
 
   async checkBrowserCapabilities() {
-    if (window.electronAPI) {
-      // Electron specific startup sequence
+    if (this.isTauri) {
+      // Tauri desktop startup — check for previously saved workspace path
       try {
         const savedHandle = await getSetting('directoryHandle');
-        if (savedHandle && savedHandle.isElectron) {
+        if (savedHandle && savedHandle.isTauri && savedHandle.path) {
+          // Persisted scope plugin auto-restores access to this path
           this.isSandbox = false;
           this.dirHandle = savedHandle;
           await this.loadWorkspace();
         }
       } catch (err) {
-        console.error('Error loading electron handle:', err);
+        console.error('Error loading saved Tauri workspace:', err);
       }
       return;
     }
@@ -170,11 +171,9 @@ class NativeNodesApp {
       try {
         const savedHandle = await getSetting('directoryHandle');
         if (savedHandle) {
-          if (savedHandle.isElectron) {
-            // Electron Mode
-            this.isSandbox = false;
-            this.dirHandle = savedHandle;
-            await this.loadWorkspace();
+          if (savedHandle.isTauri) {
+            // Cannot auto-load Tauri workspace path in browser mode
+            console.log('Saved workspace is for Tauri mode; cannot load in browser.');
           } else {
             // Web Mode
             const permission = await savedHandle.queryPermission({ mode: 'readwrite' });
@@ -502,20 +501,27 @@ class NativeNodesApp {
 
   async selectWorkspace() {
     try {
-      if (window.electronAPI) {
-        const folderPath = await window.electronAPI.selectFolder();
+      if (this.isTauri) {
+        // Use Tauri dialog plugin for native folder picker
+        const folderPath = await window.__TAURI__.dialog.open({
+          directory: true,
+          multiple: false,
+          recursive: true,
+          title: 'Select Workspace Folder'
+        });
         if (folderPath) {
           this.isSandbox = false;
-          // Use string path as handle in electron mode
-          this.dirHandle = { path: folderPath, name: folderPath.split(/[\\/]/).pop(), isElectron: true };
+          this.dirHandle = { path: folderPath, name: folderPath.split(/[\\/]/).pop(), isTauri: true };
           await setSetting('directoryHandle', this.dirHandle);
           await this.loadWorkspace();
         }
         return;
       }
 
-      const handle = await window.showDirectoryPicker();
-      const permission = await handle.requestPermission({ mode: 'readwrite' });
+      const handle = await window.showDirectoryPicker({
+        mode: 'readwrite'
+      });
+      const permission = await handle.queryPermission({ mode: 'readwrite' });
       if (permission !== 'granted') {
         alert('Permission is required to write changes to local workspace.');
         return;
@@ -545,7 +551,11 @@ class NativeNodesApp {
     try {
       const handle = await getSetting('directoryHandle');
       if (handle) {
-        if (handle.isElectron) {
+        if (handle.isTauri) {
+           if (!this.isTauri) {
+             alert('Cannot restore Tauri workspace in browser mode.');
+             return;
+           }
            this.isSandbox = false;
            this.dirHandle = handle;
            await this.loadWorkspace();
@@ -635,26 +645,9 @@ class NativeNodesApp {
    */
 
   async scanDirectory(dirHandle, currentPath = '', promises = []) {
-    if (dirHandle.isElectron) {
-      const files = await window.electronAPI.readDirectory(dirHandle.path);
-      for (const file of files) {
-        const pageName = file.relativePath.slice(0, -3); // Strip .md
-        const pageObj = {
-          name: pageName,
-          content: file.content,
-          exists: true,
-          handle: file.fullPath, // Use string path instead of FileSystemFileHandle
-          tags: extractTags(file.content)
-        };
-        this.pages.set(pageName.toLowerCase(), pageObj);
-
-        const parts = pageName.toLowerCase().split('/');
-        const flatName = parts[parts.length - 1];
-        if (!this.pageNamesIndex.has(flatName)) {
-          this.pageNamesIndex.set(flatName, []);
-        }
-        this.pageNamesIndex.get(flatName).push(pageObj);
-      }
+    if (dirHandle.isTauri) {
+      // Tauri mode: use fs plugin to read directory recursively
+      await this._scanDirectoryTauri(dirHandle.path, '');
       return;
     }
 
@@ -699,6 +692,55 @@ class NativeNodesApp {
 
     if (isRoot && promises.length > 0) {
       await Promise.all(promises);
+    }
+  }
+
+  /**
+   * Recursively scan directory using Tauri fs plugin.
+   */
+  async _scanDirectoryTauri(basePath, currentRelative) {
+    const fs = window.__TAURI__.fs;
+    const fullPath = currentRelative ? `${basePath}/${currentRelative}` : basePath;
+    
+    let entries;
+    try {
+      entries = await fs.readDir(fullPath);
+    } catch (err) {
+      console.error('Error reading directory:', fullPath, err);
+      return;
+    }
+
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue;
+
+      const relativePath = currentRelative ? `${currentRelative}/${entry.name}` : entry.name;
+
+      if (entry.isDirectory) {
+        await this._scanDirectoryTauri(basePath, relativePath);
+      } else if (entry.isFile && entry.name.toLowerCase().endsWith('.md')) {
+        try {
+          const content = await fs.readTextFile(`${basePath}/${relativePath}`);
+          const pageName = relativePath.slice(0, -3); // Strip .md
+
+          const pageObj = {
+            name: pageName,
+            content: content,
+            exists: true,
+            handle: `${basePath}/${relativePath}`, // Store full path string
+            tags: extractTags(content)
+          };
+          this.pages.set(pageName.toLowerCase(), pageObj);
+
+          const parts = pageName.toLowerCase().split('/');
+          const flatName = parts[parts.length - 1];
+          if (!this.pageNamesIndex.has(flatName)) {
+            this.pageNamesIndex.set(flatName, []);
+          }
+          this.pageNamesIndex.get(flatName).push(pageObj);
+        } catch (err) {
+          console.error('Error reading file:', relativePath, err);
+        }
+      }
     }
   }
 
@@ -1011,9 +1053,9 @@ class NativeNodesApp {
       // Write file changes back to local hard drive
       const handle = this.activePage.handle;
       if (handle) {
-        if (typeof handle === 'string' && window.electronAPI) {
-          // Electron mode
-          await window.electronAPI.saveFile(handle, newContent);
+        if (typeof handle === 'string' && this.isTauri) {
+          // Tauri mode — write via fs plugin
+          await window.__TAURI__.fs.writeTextFile(handle, newContent);
         } else {
           // Web API mode
           const writable = await handle.createWritable();
@@ -1099,9 +1141,15 @@ class NativeNodesApp {
 
     try {
       let handleOrPath;
-      if (this.dirHandle.isElectron && window.electronAPI) {
-        // Electron mode
-        const fullPath = await window.electronAPI.createFile(this.dirHandle.path, filename, defaultContent);
+      if (this.dirHandle.isTauri && this.isTauri) {
+        // Tauri mode — create directories and file via fs plugin
+        const fs = window.__TAURI__.fs;
+        if (folderPathParts.length > 0) {
+          const folderFullPath = `${this.dirHandle.path}/${folderPathParts.join('/')}`;
+          await fs.mkdir(folderFullPath, { recursive: true });
+        }
+        const fullPath = `${this.dirHandle.path}/${relativePathParts.join('/')}.md`;
+        await fs.writeTextFile(fullPath, defaultContent);
         handleOrPath = fullPath;
       } else {
         // Web API mode
