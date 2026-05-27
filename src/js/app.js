@@ -7,9 +7,10 @@
 
 import { getSetting, setSetting, deleteSetting } from './db.js';
 
-import { renderMarkdown, extractWikiLinks, extractTags, stripFrontmatter, escapeHTML } from './editor.js';
-import Editor from 'https://esm.sh/@toast-ui/editor@3.2.2?bundle';
+import { renderMarkdown, extractWikiLinks, extractTags, stripFrontmatter, escapeHTML, parseFrontmatter, stringifyFrontmatter } from './editor.js';
+import { CodeMirrorEditor } from './codemirror-editor.js';
 import { WikiGraph } from './graph.js';
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.esm.min.mjs';
 
 class NativeNodesApp {
   constructor() {
@@ -70,9 +71,8 @@ class NativeNodesApp {
       layoutToggleBtn: document.getElementById('layoutToggleBtn'),
       toggleGraphBtn: document.getElementById('toggleGraphBtn'),
       exportHtmlBtn: document.getElementById('exportHtmlBtn'),
-      themeToggleBtn: document.getElementById('themeToggleBtn'),
-      themeIconSun: document.getElementById('themeIconSun'),
-      themeIconMoon: document.getElementById('themeIconMoon'),
+      themePickerBtn: document.getElementById('themePickerBtn'),
+      themeDropdownMenu: document.getElementById('themeDropdownMenu'),
       
       graphCard: document.getElementById('graphCard'),
       graphCanvas: document.getElementById('graphCanvas'),
@@ -88,23 +88,34 @@ class NativeNodesApp {
       helpModal: document.getElementById('helpModal'),
       tagInputField: document.getElementById('tagInputField'),
       tagPillsList: document.getElementById('tagPillsList'),
-      tagAutocompleteDropdown: document.getElementById('tagAutocompleteDropdown')
+      tagAutocompleteDropdown: document.getElementById('tagAutocompleteDropdown'),
+      propertiesContainer: document.getElementById('propertiesContainer'),
+      propertiesHeader: document.getElementById('propertiesHeader'),
+      propertiesList: document.getElementById('propertiesList'),
+      addPropertyBtn: document.getElementById('addPropertyBtn'),
+      activeNoteTitleInput: document.getElementById('activeNoteTitleInput')
     };
 
 
-    this.editor = new Editor({
+    this.editor = new CodeMirrorEditor({
       el: this.dom.editorTextarea,
-      height: '100%',
-      initialEditType: 'wysiwyg',
-      previewStyle: 'vertical',
-      theme: this.theme === 'dark' ? 'dark' : 'light',
-      events: {
-        change: () => {
-          this.markAsDirty();
-          this.triggerAutoSave();
-        }
+      theme: this.theme,
+      onChange: () => {
+        this.markAsDirty();
+        this.triggerAutoSave();
       }
     });
+
+    try {
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: 'dark',
+        securityLevel: 'loose',
+        logLevel: 5
+      });
+    } catch (e) {
+      console.error('Failed to initialize mermaid:', e);
+    }
 
     this.init();
 
@@ -239,10 +250,8 @@ class NativeNodesApp {
     const savedTheme = await getSetting('theme');
     if (savedTheme) {
       this.setTheme(savedTheme);
-    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
-      this.setTheme('light');
     } else {
-      this.setTheme('dark');
+      this.setTheme('dracula');
     }
 
     // Layout
@@ -258,6 +267,12 @@ class NativeNodesApp {
     // Expanded folders state
     const savedExpanded = await getSetting('expandedFolders');
     this.expandedFolders = savedExpanded ? new Set(savedExpanded) : null;
+
+    // Properties collapsed state
+    const savedCollapsed = await getSetting('propertiesCollapsed');
+    if (savedCollapsed !== undefined) {
+      this.dom.propertiesContainer.classList.toggle('collapsed', savedCollapsed);
+    }
   }
 
   /**
@@ -268,22 +283,35 @@ class NativeNodesApp {
     document.documentElement.setAttribute('data-theme', theme);
     setSetting('theme', theme);
 
-    if (theme === 'dark') {
-      this.dom.themeIconSun.style.display = 'block';
-      this.dom.themeIconMoon.style.display = 'none';
-    } else {
-      this.dom.themeIconSun.style.display = 'none';
-      this.dom.themeIconMoon.style.display = 'block';
+    if (this.dom.themeDropdownMenu) {
+      this.dom.themeDropdownMenu.querySelectorAll('.dropdown-item').forEach(item => {
+        item.classList.toggle('active', item.dataset.themeId === theme);
+      });
+    }
+
+    try {
+      const isDark = ['dracula', 'onedark', 'nord', 'gruvbox-dark', 'solarized-dark', 'monokai', 'tokyonight', 'catppuccin', 'github-dark', 'dark'].includes(theme);
+      mermaid.initialize({
+        theme: isDark ? 'dark' : 'default'
+      });
+    } catch (e) {}
+
+    if (this.editor && typeof this.editor.setTheme === 'function') {
+      this.editor.setTheme(theme);
     }
 
     if (this.graph) {
+      const isDark = ['dracula', 'onedark', 'nord', 'gruvbox-dark', 'solarized-dark', 'monokai', 'tokyonight', 'catppuccin', 'github-dark', 'dark'].includes(theme);
       this.graph.updateData(
         this.getGraphNodes(),
         this.getGraphLinks(),
         this.activePage ? this.activePage.name : null,
-        this.theme === 'dark'
+        isDark
       );
     }
+
+    // Re-render preview to apply new mermaid theme
+    this.renderPreview();
   }
 
   /**
@@ -383,11 +411,8 @@ class NativeNodesApp {
       setTimeout(() => this.graph.resizeCanvas(), 250);
     });
 
-    // Modals Controls
-    this.dom.helpModalBtn.addEventListener('click', () => this.dom.helpModal.showModal());
-    this.dom.themeToggleBtn.addEventListener('click', () => {
-      this.setTheme(this.theme === 'dark' ? 'light' : 'dark');
-    });
+    // Initialize Theme Picker
+    this.populateThemePicker();
 
     document.querySelectorAll('[data-close]').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -444,10 +469,13 @@ class NativeNodesApp {
         this.setGraphVisibility(!this.graphVisible);
       }
 
-      // Theme Toggle: Cmd+I
+      // Theme Cycle: Cmd+I
       if (isCmd && e.key.toLowerCase() === 'i') {
         e.preventDefault();
-        this.setTheme(this.theme === 'dark' ? 'light' : 'dark');
+        const themeKeys = ['dracula', 'onedark', 'nord', 'gruvbox-dark', 'gruvbox-light', 'solarized-dark', 'solarized-light', 'monokai', 'tokyonight', 'catppuccin', 'github-dark', 'github-light'];
+        const currentIndex = themeKeys.indexOf(this.theme);
+        const nextIndex = (currentIndex + 1) % themeKeys.length;
+        this.setTheme(themeKeys[nextIndex]);
       }
 
       // Layout toggle: Alt+L
@@ -609,12 +637,14 @@ class NativeNodesApp {
     ];
 
     for (const note of demoNotes) {
+      const fm = parseFrontmatter(note.content);
       const pageObj = {
         name: note.name,
         content: note.content,
         exists: true,
         handle: null,
-        tags: extractTags(note.content)
+        tags: fm.tags,
+        fields: fm.fields
       };
       this.pages.set(note.name.toLowerCase(), pageObj);
 
@@ -666,12 +696,14 @@ class NativeNodesApp {
           const content = await file.text();
           const pageName = relativePath.slice(0, -3); // Strip .md
 
+          const fm = parseFrontmatter(content);
           const pageObj = {
             name: pageName,
             content: content,
             exists: true,
             handle: entry,
-            tags: extractTags(content)
+            tags: fm.tags,
+            fields: fm.fields
           };
           this.pages.set(pageName.toLowerCase(), pageObj);
 
@@ -725,12 +757,14 @@ class NativeNodesApp {
           const content = await fs.readTextFile(`${basePath}/${relativePath}`);
           const pageName = relativePath.slice(0, -3); // Strip .md
 
+          const fm = parseFrontmatter(content);
           const pageObj = {
             name: pageName,
             content: content,
             exists: true,
             handle: `${basePath}/${relativePath}`, // Store full path string
-            tags: extractTags(content)
+            tags: fm.tags,
+            fields: fm.fields
           };
           this.pages.set(pageName.toLowerCase(), pageObj);
 
@@ -948,8 +982,8 @@ class NativeNodesApp {
     this.editor.setMarkdown(stripFrontmatter(page.content));
     this.dom.activeNoteTitle.textContent = page.name;
 
-    // Render tag chips in tags bar
-    this.renderTagBarChips();
+    // Render properties metadata block
+    this.renderProperties();
 
     // Mark as clean initially
     this.markAsClean();
@@ -977,27 +1011,57 @@ class NativeNodesApp {
   renderPreview() {
     if (!this.activePage) return;
     const text = this.editor.getMarkdown();
-    
-    // Pass the pages Map directly to avoid expensive Set creation on every render
     const html = renderMarkdown(text, this.pages);
     
+    // Render properties block for preview if any exist
+    let propertiesHTML = '';
     const tags = this.activePage.tags || [];
-    let tagsHTML = '';
-    if (tags && tags.length > 0) {
-      tagsHTML = `<div class="preview-tags-container">` +
-        tags.map(tag => `<span class="tag-pill" data-tag="${escapeHTML(tag)}">#${escapeHTML(tag)}</span>`).join('') +
-        `</div>`;
+    const fields = this.activePage.fields || {};
+    const hasFields = Object.keys(fields).length > 0;
+    
+    if (tags.length > 0 || hasFields) {
+      propertiesHTML += `<div class="preview-properties">`;
+      propertiesHTML += `<div class="preview-properties-title">Properties</div>`;
+      propertiesHTML += `<div class="preview-properties-grid">`;
+      
+      if (tags.length > 0) {
+        propertiesHTML += `<div class="preview-property-label">`;
+        propertiesHTML += `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 4px; display: inline;"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>`;
+        propertiesHTML += `tags</div>`;
+        propertiesHTML += `<div class="preview-property-value">`;
+        propertiesHTML += tags.map(tag => `<span class="tag-pill" data-tag="${escapeHTML(tag)}">#${escapeHTML(tag)}</span>`).join(' ');
+        propertiesHTML += `</div>`;
+      }
+      
+      for (const [k, v] of Object.entries(fields)) {
+        propertiesHTML += `<div class="preview-property-label">${escapeHTML(k)}</div>`;
+        propertiesHTML += `<div class="preview-property-value">${escapeHTML(v)}</div>`;
+      }
+      
+      propertiesHTML += `</div></div>`;
     }
     
-    this.dom.previewContent.innerHTML = tagsHTML + html;
+    this.dom.previewContent.innerHTML = propertiesHTML + html;
 
     // Add event listeners to tags in preview to filter by tag when clicked
     this.dom.previewContent.querySelectorAll('.tag-pill').forEach(pill => {
-      pill.addEventListener('click', () => {
+      pill.addEventListener('click', (e) => {
+        e.stopPropagation();
         const tag = pill.getAttribute('data-tag');
         this.filterByTag(tag);
       });
     });
+
+    // Run mermaid rendering
+    try {
+      mermaid.run({
+        querySelector: '.mermaid'
+      }).catch(err => {
+        console.warn("Mermaid render error:", err);
+      });
+    } catch (e) {
+      console.warn("Mermaid run error:", e);
+    }
   }
 
   /**
@@ -1040,9 +1104,10 @@ class NativeNodesApp {
     
     const editorMarkdown = this.editor.getMarkdown();
     const tagsList = this.activePage.tags || [];
+    const fields = this.activePage.fields || {};
     
     // Reconstruct frontmatter and prepend to markdown
-    const frontmatter = tagsList.length > 0 ? `---\ntags: [${tagsList.join(', ')}]\n---\n` : `---\ntags: []\n---\n`;
+    const frontmatter = stringifyFrontmatter(tagsList, fields);
     const fullContent = frontmatter + editorMarkdown;
     
     this.activePage.content = fullContent;
@@ -1052,6 +1117,7 @@ class NativeNodesApp {
     if (pageInMap) {
       pageInMap.content = fullContent;
       pageInMap.tags = tagsList;
+      pageInMap.fields = fields;
     }
 
     if (this.isSandbox) {
@@ -1552,6 +1618,268 @@ class NativeNodesApp {
   hideAutocomplete() {
     this.dom.tagAutocompleteDropdown.style.display = 'none';
     this.dom.tagAutocompleteDropdown.innerHTML = '';
+  }
+
+  populateThemePicker() {
+    const THEMES = {
+      'dracula': { name: 'Dracula', mode: 'dark' },
+      'onedark': { name: 'One Dark', mode: 'dark' },
+      'nord': { name: 'Nord', mode: 'dark' },
+      'gruvbox-dark': { name: 'Gruvbox Dark', mode: 'dark' },
+      'gruvbox-light': { name: 'Gruvbox Light', mode: 'light' },
+      'solarized-dark': { name: 'Solarized Dark', mode: 'dark' },
+      'solarized-light': { name: 'Solarized Light', mode: 'light' },
+      'monokai': { name: 'Monokai', mode: 'dark' },
+      'tokyonight': { name: 'Tokyo Night', mode: 'dark' },
+      'catppuccin': { name: 'Catppuccin', mode: 'dark' },
+      'github-dark': { name: 'Github Dark', mode: 'dark' },
+      'github-light': { name: 'Github Light', mode: 'light' }
+    };
+    
+    this.dom.themeDropdownMenu.innerHTML = '';
+    for (const [themeId, themeData] of Object.entries(THEMES)) {
+      const btn = document.createElement('div');
+      btn.className = `dropdown-item ${this.theme === themeId ? 'active' : ''}`;
+      btn.dataset.themeId = themeId;
+      btn.textContent = themeData.name;
+      
+      btn.addEventListener('click', () => {
+        this.setTheme(themeId);
+        this.dom.themeDropdownMenu.style.display = 'none';
+      });
+      
+      this.dom.themeDropdownMenu.appendChild(btn);
+    }
+    
+    // Handle theme dropdown toggling
+    this.dom.themePickerBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const visible = this.dom.themeDropdownMenu.style.display === 'flex';
+      this.dom.themeDropdownMenu.style.display = visible ? 'none' : 'flex';
+    });
+    
+    document.addEventListener('click', () => {
+      this.dom.themeDropdownMenu.style.display = 'none';
+    });
+  }
+
+  renderProperties() {
+    if (!this.activePage) {
+      this.dom.propertiesContainer.style.display = 'none';
+      return;
+    }
+    
+    this.dom.propertiesContainer.style.display = 'flex';
+    
+    // Keep only the tags row in the grid, clear everything else
+    const rows = this.dom.propertiesList.querySelectorAll('.property-row');
+    rows.forEach(row => {
+      if (row.id !== 'tagsPropertyRow') {
+        row.remove();
+      }
+    });
+    
+    // Render tag chips
+    this.renderTagBarChips();
+    
+    // Now render each custom field
+    const fields = this.activePage.fields || {};
+    for (const [key, val] of Object.entries(fields)) {
+      const row = document.createElement('div');
+      row.className = 'property-row';
+      
+      row.innerHTML = `
+        <div class="property-key-container">
+          <svg class="property-key-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="4" y1="9" x2="20" y2="9"></line>
+            <line x1="4" y1="15" x2="20" y2="15"></line>
+            <line x1="10" y1="3" x2="8" y2="21"></line>
+            <line x1="16" y1="3" x2="14" y2="21"></line>
+          </svg>
+          <input type="text" class="property-key" value="${escapeHTML(key)}" placeholder="property name">
+        </div>
+        <div>
+          <input type="text" class="property-val-input" value="${escapeHTML(val)}" placeholder="value">
+        </div>
+        <div>
+          <button class="delete-property-btn" title="Delete Property">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+          </button>
+        </div>
+      `;
+      
+      const keyInput = row.querySelector('.property-key');
+      const valInput = row.querySelector('.property-val-input');
+      const deleteBtn = row.querySelector('.delete-property-btn');
+      
+      // Event: Edit Key name
+      keyInput.addEventListener('change', () => {
+        const newKey = keyInput.value.trim();
+        if (!newKey) {
+          delete this.activePage.fields[key];
+          this.markAsDirty();
+          this.triggerAutoSave();
+          this.renderProperties();
+          return;
+        }
+        if (newKey === key) return;
+        
+        const currentVal = this.activePage.fields[key];
+        delete this.activePage.fields[key];
+        this.activePage.fields[newKey] = currentVal;
+        this.markAsDirty();
+        this.triggerAutoSave();
+        this.renderProperties();
+      });
+      
+      // Event: Edit Value
+      valInput.addEventListener('change', () => {
+        const newVal = valInput.value.trim();
+        if (newVal === val) return;
+        this.activePage.fields[key] = newVal;
+        this.markAsDirty();
+        this.triggerAutoSave();
+        this.renderPreview();
+      });
+      
+      // Event: Delete property
+      deleteBtn.addEventListener('click', () => {
+        delete this.activePage.fields[key];
+        this.markAsDirty();
+        this.triggerAutoSave();
+        this.renderProperties();
+        this.renderPreview();
+      });
+      
+      this.dom.propertiesList.appendChild(row);
+    }
+  }
+
+  async renameActivePage(newTitle) {
+    if (!this.activePage) return;
+    const oldName = this.activePage.name;
+    const newName = newTitle.replace(/[\\:*?"<>|]/g, '').trim();
+    
+    if (!newName || newName.toLowerCase() === oldName.toLowerCase()) {
+      this.dom.activeNoteTitle.textContent = oldName;
+      return;
+    }
+    
+    const newKey = newName.toLowerCase();
+    if (this.pages.has(newKey)) {
+      alert(`A page named "${newName}" already exists.`);
+      this.dom.activeNoteTitle.textContent = oldName;
+      return;
+    }
+
+    await this.saveActivePageSync();
+    
+    const content = this.activePage.content;
+    const tags = this.activePage.tags;
+    const fields = this.activePage.fields || {};
+    const oldKey = oldName.toLowerCase();
+    
+    try {
+      let handleOrPath = null;
+      if (this.isSandbox) {
+        const pageObj = {
+          name: newName,
+          content: content,
+          exists: true,
+          handle: null,
+          tags: tags,
+          fields: fields
+        };
+        
+        this.pages.delete(oldKey);
+        this.pages.set(newKey, pageObj);
+        this._updatePageNamesIndex(oldName, newName, pageObj);
+      } else {
+        const newFilename = newName.split('/').pop() + '.md';
+        const newFolderParts = newName.split('/').slice(0, -1);
+        
+        if (this.dirHandle.isTauri && this.isTauri) {
+          const fs = window.__TAURI__.fs;
+          if (newFolderParts.length > 0) {
+            const folderFullPath = `${this.dirHandle.path}/${newFolderParts.join('/')}`;
+            await fs.mkdir(folderFullPath, { recursive: true });
+          }
+          const newFullPath = `${this.dirHandle.path}/${newName}.md`;
+          await fs.writeTextFile(newFullPath, content);
+          handleOrPath = newFullPath;
+          
+          const oldFullPath = this.activePage.handle;
+          if (oldFullPath) {
+            await fs.removeFile(oldFullPath);
+          }
+        } else {
+          let currentDir = this.dirHandle;
+          for (const folderName of newFolderParts) {
+            currentDir = await currentDir.getDirectoryHandle(folderName, { create: true });
+          }
+          const newFileHandle = await currentDir.getFileHandle(newFilename, { create: true });
+          const writable = await newFileHandle.createWritable();
+          await writable.write(content);
+          await writable.close();
+          handleOrPath = newFileHandle;
+          
+          let oldDir = this.dirHandle;
+          const oldParts = oldName.split('/');
+          const oldFilename = oldParts[oldParts.length - 1] + '.md';
+          const oldFolderParts = oldParts.slice(0, -1);
+          for (const folderName of oldFolderParts) {
+            oldDir = await oldDir.getDirectoryHandle(folderName);
+          }
+          await oldDir.removeEntry(oldFilename);
+        }
+        
+        const pageObj = {
+          name: newName,
+          content: content,
+          exists: true,
+          handle: handleOrPath,
+          tags: tags,
+          fields: fields
+        };
+        
+        this.pages.delete(oldKey);
+        this.pages.set(newKey, pageObj);
+        this._updatePageNamesIndex(oldName, newName, pageObj);
+      }
+      
+      this.activePage = this.pages.get(newKey);
+      this.dom.activeNoteTitle.textContent = newName;
+      this.renderFileList();
+      this.updateGraph();
+      
+      window.location.hash = `#/page/${encodeURIComponent(newName)}`;
+      
+    } catch (err) {
+      alert('Failed to rename page file.');
+      console.error(err);
+      this.dom.activeNoteTitle.textContent = oldName;
+    }
+  }
+
+  _updatePageNamesIndex(oldName, newName, pageObj) {
+    const oldParts = oldName.toLowerCase().split('/');
+    const oldFlat = oldParts[oldParts.length - 1];
+    if (this.pageNamesIndex.has(oldFlat)) {
+      const arr = this.pageNamesIndex.get(oldFlat);
+      const idx = arr.findIndex(p => p.name.toLowerCase() === oldName.toLowerCase());
+      if (idx !== -1) arr.splice(idx, 1);
+      if (arr.length === 0) this.pageNamesIndex.delete(oldFlat);
+    }
+    
+    const newParts = newName.toLowerCase().split('/');
+    const newFlat = newParts[newParts.length - 1];
+    if (!this.pageNamesIndex.has(newFlat)) {
+      this.pageNamesIndex.set(newFlat, []);
+    }
+    this.pageNamesIndex.get(newFlat).push(pageObj);
   }
 }
 

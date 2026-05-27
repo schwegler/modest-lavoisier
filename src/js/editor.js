@@ -54,6 +54,21 @@ export function renderMarkdown(markdown, existingPages = new Set()) {
 
   // Configure custom marked renderer
   const renderer = {
+    code(codeOrObj, infostring, escaped) {
+      let codeText = '';
+      let lang = '';
+      if (typeof codeOrObj === 'object' && codeOrObj !== null) {
+        codeText = codeOrObj.text || '';
+        lang = codeOrObj.lang || '';
+      } else {
+        codeText = codeOrObj || '';
+        lang = infostring || '';
+      }
+      if (lang === 'mermaid') {
+        return `<div class="mermaid">${escapeHTML(codeText)}</div>`;
+      }
+      return `<pre><code class="language-${escapeHTML(lang)}">${escapeHTML(codeText)}</code></pre>`;
+    },
     link(href, title, text) {
       if (href.startsWith('wikilink:')) {
         const pageName = decodeURIComponent(href.slice(9));
@@ -186,4 +201,70 @@ export function stripFrontmatter(markdown) {
   if (!markdown) return '';
   const frontmatterRegex = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
   return markdown.replace(frontmatterRegex, '');
+}
+
+/**
+ * Parses all frontmatter fields from markdown.
+ * 
+ * @param {string} markdown 
+ * @returns {{tags: string[], fields: Object<string, string>}}
+ */
+export function parseFrontmatter(markdown) {
+  const result = { tags: [], fields: {} };
+  if (!markdown) return result;
+  
+  const frontmatterRegex = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
+  const match = markdown.match(frontmatterRegex);
+  if (match) {
+    const frontmatterContent = match[1];
+    const lines = frontmatterContent.split('\n');
+    
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      
+      const colonIndex = trimmed.indexOf(':');
+      if (colonIndex !== -1) {
+        const key = trimmed.slice(0, colonIndex).trim();
+        const valueStr = trimmed.slice(colonIndex + 1).trim();
+        
+        if (key === 'tags') {
+          // Parse tags: tags: [tag1, tag2] or tags: tag1, tag2
+          const tagsMatch = valueStr.match(/^\[(.*?)\]$/);
+          if (tagsMatch) {
+            result.tags = tagsMatch[1].split(',')
+              .map(t => t.trim())
+              .filter(Boolean);
+          } else {
+            result.tags = valueStr.split(',')
+              .map(t => t.trim())
+              .filter(Boolean);
+          }
+        } else {
+          result.fields[key] = valueStr;
+        }
+      }
+    }
+  }
+  return result;
+}
+
+/**
+ * Generates frontmatter string from tags and fields.
+ * 
+ * @param {string[]} tags 
+ * @param {Object<string, string>} fields 
+ * @returns {string} Frontmatter block (including --- wrappers)
+ */
+export function stringifyFrontmatter(tags, fields) {
+  const lines = [];
+  lines.push('---');
+  lines.push(`tags: [${(tags || []).join(', ')}]`);
+  for (const [key, val] of Object.entries(fields || {})) {
+    if (key.trim() && key !== 'tags') {
+      lines.push(`${key.trim()}: ${String(val).trim()}`);
+    }
+  }
+  lines.push('---');
+  return lines.join('\n') + '\n';
 }

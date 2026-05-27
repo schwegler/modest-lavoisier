@@ -52,14 +52,12 @@ test.describe('Native Nodes Web App Tests', () => {
   test('should handle layout switches and dark/light themes', async ({ page }) => {
     await page.click('#demoWorkspaceBtn');
 
-    // 1. Theme toggle verification
+    // 1. Theme picker dropdown verification
     const html = page.locator('html');
-    const initialTheme = await html.getAttribute('data-theme');
-    expect(['light', 'dark']).toContain(initialTheme);
-    
-    await page.click('#themeToggleBtn');
-    const expectedTheme = initialTheme === 'dark' ? 'light' : 'dark';
-    await expect(html).toHaveAttribute('data-theme', expectedTheme);
+    await page.click('#themePickerBtn');
+    await page.waitForSelector('#themeDropdownMenu', { state: 'visible' });
+    await page.click('#themeDropdownMenu .dropdown-item[data-theme-id="onedark"]');
+    await expect(html).toHaveAttribute('data-theme', 'onedark');
 
     // 2. Layout panel toggling
     const panels = page.locator('#workspacePanels');
@@ -239,14 +237,14 @@ test.describe('Native Nodes Web App Tests', () => {
     await page.waitForTimeout(500);
     await expect(panels).toHaveClass(/edit-only/);
 
-    // Theme toggle via Control+i (or Cmd+i)
+    // Theme cycle via Control+i (or Cmd+i)
     const html = page.locator('html');
     const initialTheme = await html.getAttribute('data-theme');
     
     // We send Control+i since our handler accepts e.metaKey || e.ctrlKey
     await page.keyboard.press('Control+i');
-    const expectedTheme = initialTheme === 'dark' ? 'light' : 'dark';
-    await expect(html).toHaveAttribute('data-theme', expectedTheme);
+    const newTheme = await html.getAttribute('data-theme');
+    expect(newTheme).not.toBe(initialTheme);
 
     // Search focus shortcut: Control+f (or Cmd+f)
     await page.keyboard.press('Control+f');
