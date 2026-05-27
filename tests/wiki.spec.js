@@ -63,17 +63,17 @@ test.describe('Native Nodes Web App Tests', () => {
 
     // 2. Layout panel toggling
     const panels = page.locator('#workspacePanels');
-    await expect(panels).not.toHaveClass(/edit-only/);
-    await expect(panels).not.toHaveClass(/preview-only/);
     
-    await page.click('#layoutEditBtn');
+    // Check initial layout (defaults to edit-only)
     await expect(panels).toHaveClass(/edit-only/);
     
-    await page.click('#layoutPreviewBtn');
+    // Toggle to preview-only
+    await page.click('#layoutToggleBtn');
     await expect(panels).toHaveClass(/preview-only/);
-
-    await page.click('#layoutSplitBtn');
-    await expect(panels).toHaveClass(/split-only/);
+    
+    // Toggle back to edit-only
+    await page.click('#layoutToggleBtn');
+    await expect(panels).toHaveClass(/edit-only/);
   });
 
   test('should support note editing, previewing, and autosaving', async ({ page }) => {
@@ -228,7 +228,7 @@ test.describe('Native Nodes Web App Tests', () => {
   test('should support keyboard shortcuts', async ({ page }) => {
     await page.click('#demoWorkspaceBtn');
 
-    // Alt+L cycles layouts
+    // Alt+L toggles layouts
     const panels = page.locator('#workspacePanels');
 
     await page.keyboard.press('Alt+l');
@@ -238,10 +238,6 @@ test.describe('Native Nodes Web App Tests', () => {
     await page.keyboard.press('Alt+l');
     await page.waitForTimeout(500);
     await expect(panels).toHaveClass(/edit-only/);
-
-    await page.keyboard.press('Alt+l');
-    await page.waitForTimeout(500);
-    await expect(panels).toHaveClass(/split-only/);
 
     // Theme toggle via Control+i (or Cmd+i)
     const html = page.locator('html');

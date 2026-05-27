@@ -67,9 +67,7 @@ class NativeNodesApp {
       previewContent: document.getElementById('previewContent'),
       workspacePanels: document.getElementById('workspacePanels'),
       
-      layoutEditBtn: document.getElementById('layoutEditBtn'),
-      layoutSplitBtn: document.getElementById('layoutSplitBtn'),
-      layoutPreviewBtn: document.getElementById('layoutPreviewBtn'),
+      layoutToggleBtn: document.getElementById('layoutToggleBtn'),
       toggleGraphBtn: document.getElementById('toggleGraphBtn'),
       exportHtmlBtn: document.getElementById('exportHtmlBtn'),
       themeToggleBtn: document.getElementById('themeToggleBtn'),
@@ -249,9 +247,7 @@ class NativeNodesApp {
 
     // Layout
     const savedLayout = await getSetting('layout');
-    if (savedLayout) {
-      this.setLayout(savedLayout);
-    }
+    this.setLayout(savedLayout || 'edit');
 
     // Graph visibility
     const savedGraphVisible = await getSetting('graphVisible');
@@ -294,13 +290,16 @@ class NativeNodesApp {
    * Panel toggle handler.
    */
   setLayout(layout) {
+    if (layout !== 'edit' && layout !== 'preview') {
+      layout = 'edit';
+    }
     this.layout = layout;
     this.dom.workspacePanels.className = `workspace-panels ${layout}-only`;
     
-    // Toggle active classes on toolbar buttons
-    this.dom.layoutEditBtn.classList.toggle('active', layout === 'edit');
-    this.dom.layoutSplitBtn.classList.toggle('active', layout === 'split');
-    this.dom.layoutPreviewBtn.classList.toggle('active', layout === 'preview');
+    // Toggle active class on toolbar toggle button
+    if (this.dom.layoutToggleBtn) {
+      this.dom.layoutToggleBtn.classList.toggle('active', layout === 'edit');
+    }
 
     setSetting('layout', layout);
   }
@@ -354,10 +353,10 @@ class NativeNodesApp {
       this.dom.sidebar.classList.toggle('open');
     });
 
-    // Layout Toolbar
-    this.dom.layoutEditBtn.addEventListener('click', () => this.setLayout('edit'));
-    this.dom.layoutSplitBtn.addEventListener('click', () => this.setLayout('split'));
-    this.dom.layoutPreviewBtn.addEventListener('click', () => this.setLayout('preview'));
+    // Layout Toolbar Toggle
+    this.dom.layoutToggleBtn.addEventListener('click', () => {
+      this.setLayout(this.layout === 'edit' ? 'preview' : 'edit');
+    });
     this.dom.toggleGraphBtn.addEventListener('click', () => this.setGraphVisibility(!this.graphVisible));
     
     // Graph Fullscreen
@@ -454,9 +453,7 @@ class NativeNodesApp {
       // Layout toggle: Alt+L
       if (e.altKey && e.key.toLowerCase() === 'l') {
         e.preventDefault();
-        const modes = ['edit', 'split', 'preview'];
-        const nextIdx = (modes.indexOf(this.layout) + 1) % modes.length;
-        this.setLayout(modes[nextIdx]);
+        this.setLayout(this.layout === 'edit' ? 'preview' : 'edit');
       }
     });
 
