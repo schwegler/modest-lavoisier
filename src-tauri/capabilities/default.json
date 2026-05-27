@@ -12,7 +12,6 @@
     "fs:allow-read-dir",
     "fs:allow-mkdir",
     "fs:allow-exists",
-    "fs:allow-write-file",
-    "persisted-scope:default"
+    "fs:allow-write-file"
   ]
 }
