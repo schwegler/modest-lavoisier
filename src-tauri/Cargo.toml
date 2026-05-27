@@ -1,0 +1,21 @@
+[package]
+name = "native-nodes"
+version = "1.0.0"
+description = "Offline-capable local Markdown Wiki note-taking desktop application."
+authors = ["Native Nodes Maintainers"]
+edition = "2021"
+
+[lib]
+name = "native_nodes_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-fs = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-persisted-scope = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

@@ -20,7 +20,7 @@ module.exports = defineConfig({
     headless: true,
     viewport: { width: 1280, height: 800 },
     ignoreHTTPSErrors: true,
-    video: 'retain-on-failure',
+    video: 'off',
     screenshot: 'only-on-failure'
   },
 

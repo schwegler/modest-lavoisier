@@ -12,11 +12,12 @@ Offline-capable local Markdown Wiki note-taking desktop application. A beautiful
 
 ## Installation & Development
 
-This project is built as an Electron desktop application.
+This project is built as a Tauri desktop application.
 
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) and npm installed on your machine.
+- Rust toolchain installed (for compiling the Tauri backend).
 
 ### Setup
 
@@ -28,7 +29,7 @@ npm install
 
 ### Running the App
 
-Start the application locally:
+Start the application locally in development mode:
 
 ```bash
 npm start
@@ -36,22 +37,13 @@ npm start
 
 ### Building the App
 
-Package the application for distribution using `electron-builder`:
+Build and package the application for distribution using Tauri:
 
 ```bash
-# Package for your current OS
-npm run package
-
-# Package for specific platforms
-npm run package:mac
-npm run package:win
-npm run package:linux
-
-# Package for all platforms
-npm run package:all
+npm run build
 ```
 
-The packaged applications will be output to the `dist` directory.
+The packaged applications will be output to the `src-tauri/target/release/bundle/` directory.
 
 ## Testing
 
