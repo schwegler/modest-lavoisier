@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "identifier": "com.native-nodes.notes",
   "build": {
-    "frontendDist": "../",
+    "frontendDist": "../src",
     "devUrl": null,
     "beforeDevCommand": null,
     "beforeBuildCommand": null

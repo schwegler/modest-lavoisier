@@ -17,7 +17,14 @@ This project is built as a Tauri desktop application.
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) and npm installed on your machine.
-- Rust toolchain installed (for compiling the Tauri backend).
+- Rust toolchain installed. If `cargo` is not found in your terminal, ensure it is added to your environment `PATH` by running:
+  ```bash
+  source "$HOME/.cargo/env"
+  ```
+  Or add this line to your shell profile (e.g., `~/.zshrc` or `~/.bashrc`):
+  ```bash
+  export PATH="$HOME/.cargo/bin:$PATH"
+  ```
 
 ### Setup
 
