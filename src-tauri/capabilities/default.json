@@ -13,6 +13,8 @@
     "fs:allow-read-dir",
     "fs:allow-mkdir",
     "fs:allow-exists",
-    "fs:allow-write-file"
+    "fs:allow-write-file",
+    "fs:allow-rename",
+    "fs:allow-remove"
   ]
 }

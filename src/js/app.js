@@ -512,8 +512,28 @@ class NativeNodesApp {
     });
 
     // Export Page Control
-    this.dom.exportHtmlBtn.addEventListener('click', () => {
-      window.print();
+    this.dom.exportHtmlBtn.addEventListener('click', async () => {
+      // Ensure preview content is up-to-date before printing
+      this.renderPreview();
+      
+      // Small delay to let the DOM update before triggering print
+      await new Promise(r => setTimeout(r, 100));
+      
+      if (this.isTauri) {
+        try {
+          await window.__TAURI__.core.invoke('print_page');
+        } catch (err) {
+          console.error('Tauri print failed, falling back:', err);
+          window.print();
+        }
+      } else {
+        window.print();
+      }
+    });
+
+    // Help Shortcuts Modal Trigger
+    this.dom.helpModalBtn.addEventListener('click', () => {
+      this.dom.helpModal.showModal();
     });
 
     // Editor AutoSave & Sync Change Events handled by ToastUI Editor events
@@ -562,6 +582,12 @@ class NativeNodesApp {
       if (e.altKey && e.key.toLowerCase() === 'l') {
         e.preventDefault();
         this.setLayout(this.layout === 'edit' ? 'preview' : 'edit');
+      }
+
+      // Print: Cmd+P
+      if (isCmd && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        this.dom.exportHtmlBtn.click();
       }
     });
 

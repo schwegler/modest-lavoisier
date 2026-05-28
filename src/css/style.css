@@ -1846,3 +1846,66 @@ dialog.modal::backdrop {
   height: auto;
 }
 
+/* Print Media Styles */
+@media print {
+  html, body {
+    height: auto !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  
+  .app-container {
+    display: block !important;
+    height: auto !important;
+    position: static !important;
+    width: 100% !important;
+  }
+
+  aside.sidebar,
+  header.main-header,
+  .edit-panel,
+  #graphCard,
+  dialog {
+    display: none !important;
+  }
+
+  main.main-content {
+    display: block !important;
+    height: auto !important;
+    position: static !important;
+    width: 100% !important;
+    overflow: visible !important;
+  }
+
+  .workspace-panels {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .workspace-panels.edit-only .preview-panel,
+  .workspace-panels.preview-only .preview-panel,
+  .preview-panel {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    background: transparent !important;
+    width: 100% !important;
+  }
+
+  .markdown-body {
+    max-width: 100% !important;
+    color: #000000 !important;
+    background: transparent !important;
+    font-size: 12pt !important;
+  }
+
+  a {
+    color: #000000 !important;
+    text-decoration: underline !important;
+  }
+}
+
+

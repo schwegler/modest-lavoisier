@@ -77,11 +77,15 @@ test.describe('Native Nodes Web App Tests', () => {
   test('should support note editing, previewing, and autosaving', async ({ page }) => {
     await page.click('#demoWorkspaceBtn');
 
+    // Wait for initial load to complete
+    await expect(page.locator('#activeNoteTitle')).toHaveText('Welcome');
+    const saveIndicator = page.locator('#saveStatus');
+    await expect(saveIndicator).toHaveClass(/saved/);
+
     // 1. Focus editor and add changes
     await page.evaluate((text) => window.app.editor.setMarkdown(text), '# Sandbox Custom Note\n\nTesting auto saving...');
 
     // 2. Verify Save Indicator switches to Editing state
-    const saveIndicator = page.locator('#saveStatus');
     await expect(saveIndicator).toHaveClass(/dirty/);
     await expect(saveIndicator.locator('span')).toHaveText('Editing...');
 
@@ -256,4 +260,40 @@ test.describe('Native Nodes Web App Tests', () => {
     await page.keyboard.press('Control+f');
     await expect(page.locator('#searchInput')).toBeFocused();
   });
+
+  test('should support keyboard shortcuts dialog overlay via help button', async ({ page }) => {
+    await page.click('#demoWorkspaceBtn');
+
+    // Help shortcuts dialog is initially hidden
+    const modal = page.locator('#helpModal');
+    await expect(modal).toBeHidden();
+
+    // Click the help button
+    await page.click('#helpModalBtn');
+    await expect(modal).toBeVisible();
+
+    // Close the dialog using the close button
+    await page.click('#helpModal button[data-close]');
+    await expect(modal).toBeHidden();
+  });
+
+  test('should invoke window.print when print button is clicked', async ({ page }) => {
+    await page.click('#demoWorkspaceBtn');
+
+    // Expose a mock print function and override window.print
+    await page.exposeFunction('mockPrint', () => {
+      // Flag set in page context
+    });
+    await page.evaluate(() => {
+      window._printCalled = false;
+      window.print = () => { window._printCalled = true; };
+    });
+
+    // Click the print button and wait for the async handler (100ms delay + render)
+    await page.click('#exportHtmlBtn');
+    await page.waitForTimeout(300);
+    const printCalled = await page.evaluate(() => window._printCalled);
+    expect(printCalled).toBe(true);
+  });
 });
+
