@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-print-page"
+description = "Allows invoking the print_page command"
+commands.allow = ["print_page"]
