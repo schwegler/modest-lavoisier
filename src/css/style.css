@@ -1846,13 +1846,24 @@ dialog.modal::backdrop {
   height: auto;
 }
 
+/* Print utility */
+.print-only {
+  display: none !important;
+}
+
 /* Print Media Styles */
 @media print {
+  @page {
+    margin: 20mm 15mm;
+  }
+
   html, body {
     height: auto !important;
     overflow: visible !important;
     background: #ffffff !important;
     color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
   
   .app-container {
@@ -1895,17 +1906,122 @@ dialog.modal::backdrop {
     width: 100% !important;
   }
 
+  .print-only {
+    display: block !important;
+  }
+
+  .print-title {
+    margin-top: 0 !important;
+    margin-bottom: 24px !important;
+    font-size: 28pt !important;
+    font-weight: 700 !important;
+    color: #000000 !important;
+    border-bottom: 2px solid #212529 !important;
+    padding-bottom: 12px !important;
+  }
+
   .markdown-body {
     max-width: 100% !important;
     color: #000000 !important;
     background: transparent !important;
     font-size: 12pt !important;
+    line-height: 1.6 !important;
   }
 
-  a {
+  /* Force elements inside markdown-body to render black on white */
+  .markdown-body h1,
+  .markdown-body h2,
+  .markdown-body h3,
+  .markdown-body h4,
+  .markdown-body h5,
+  .markdown-body h6,
+  .markdown-body p,
+  .markdown-body li,
+  .markdown-body span,
+  .markdown-body div {
+    color: #000000 !important;
+  }
+
+  .markdown-body a {
     color: #000000 !important;
     text-decoration: underline !important;
   }
+
+  /* Print Styles for Code Blocks */
+  .markdown-body code {
+    font-size: 10pt !important;
+    background: #f1f3f5 !important;
+    border: 1px solid #dee2e6 !important;
+    color: #000000 !important;
+    padding: 2px 5px !important;
+  }
+
+  .markdown-body pre {
+    background: #f8f9fa !important;
+    border: 1px solid #dee2e6 !important;
+    padding: 12px !important;
+  }
+
+  .markdown-body pre code {
+    background: transparent !important;
+    border: none !important;
+    color: #000000 !important;
+    padding: 0 !important;
+  }
+
+  /* Print Styles for Blockquotes */
+  .markdown-body blockquote {
+    color: #495057 !important;
+    border-left: 4px solid #adb5bd !important;
+    background: #f8f9fa !important;
+    padding: 8px 16px !important;
+  }
+
+  /* Print Styles for Tables */
+  .markdown-body table {
+    border-collapse: collapse !important;
+  }
+
+  .markdown-body th,
+  .markdown-body td {
+    border: 1px solid #dee2e6 !important;
+  }
+
+  .markdown-body th {
+    background: #e9ecef !important;
+    color: #000000 !important;
+  }
+
+  /* Print Styles for Metadata Properties */
+  .preview-properties {
+    background: #f8f9fa !important;
+    border: 1px solid #dee2e6 !important;
+    padding: 12px !important;
+    border-radius: 8px !important;
+    margin-bottom: 24px !important;
+  }
+
+  .preview-properties-title {
+    color: #6c757d !important;
+    border-bottom: 1px solid #dee2e6 !important;
+    padding-bottom: 4px !important;
+  }
+
+  .preview-property-label {
+    color: #495057 !important;
+  }
+
+  .preview-property-value {
+    color: #212529 !important;
+  }
+
+  .tag-pill {
+    background: #e9ecef !important;
+    color: #495057 !important;
+    border: 1px solid #dee2e6 !important;
+    padding: 2px 8px !important;
+  }
 }
+
 
 

@@ -1151,7 +1151,8 @@ class NativeNodesApp {
       propertiesHTML += `</div></div>`;
     }
     
-    this.dom.previewContent.innerHTML = propertiesHTML + html;
+    const printTitleHTML = `<h1 class="print-only print-title">${escapeHTML(this.activePage.name)}</h1>`;
+    this.dom.previewContent.innerHTML = printTitleHTML + propertiesHTML + html;
 
     // Add event listeners to tags in preview to filter by tag when clicked
     this.dom.previewContent.querySelectorAll('.tag-pill').forEach(pill => {
