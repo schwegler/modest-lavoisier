@@ -25,7 +25,7 @@ test.describe('Native Nodes Web App Tests', () => {
 
     // 4. Verify Active Page loads "Welcome" note
     await expect(page.locator('#activeNoteTitle')).toHaveText('Welcome');
-    await expect(page.locator('#previewContent h1')).toContainText('Welcome to Native Nodes!');
+    await expect(page.locator('#previewContent h1:not(.print-only)')).toContainText('Welcome to Native Nodes!');
   });
 
   test('should support nested file tree and collapse interactions', async ({ page }) => {
@@ -95,7 +95,7 @@ test.describe('Native Nodes Web App Tests', () => {
     await expect(saveIndicator.locator('span')).toHaveText('Saved');
 
     // 4. Verify preview pane rendered HTML content
-    await expect(page.locator('#previewContent h1')).toHaveText('Sandbox Custom Note');
+    await expect(page.locator('#previewContent h1:not(.print-only)')).toHaveText('Sandbox Custom Note');
   });
 
   test('should support flat namespace wiki links and folder collapse-all', async ({ page }) => {
