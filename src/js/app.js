@@ -786,7 +786,7 @@ class NativeNodesApp {
    * Recursively scans for markdown files.
    */
 
-  async scanDirectory(dirHandle, currentPath = '', promises = []) {
+  async scanDirectory(dirHandle, currentPath = '', entries = []) {
     if (dirHandle.isTauri) {
       // Tauri mode: use fs plugin to read directory recursively
       await this._scanDirectoryTauri(dirHandle.path, '');
@@ -800,6 +800,16 @@ class NativeNodesApp {
       const relativePath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
       
       if (entry.kind === 'file' && entry.name.toLowerCase().endsWith('.md')) {
+        entries.push({ entry, relativePath });
+      } else if (entry.kind === 'directory') {
+        if (entry.name.startsWith('.')) continue; // skip hidden/system directories
+        await this.scanDirectory(entry, relativePath, entries);
+      }
+    }
+
+    if (isRoot && entries.length > 0) {
+      const promises = [];
+      for (const { entry, relativePath } of entries) {
         promises.push((async () => {
           const file = await entry.getFile();
           const content = await file.text();
@@ -823,19 +833,16 @@ class NativeNodesApp {
           }
           this.pageNamesIndex.get(flatName).push(pageObj);
         })());
-      } else if (entry.kind === 'directory') {
-        if (entry.name.startsWith('.')) continue; // skip hidden/system directories
-        await this.scanDirectory(entry, relativePath, promises);
+
+        if (promises.length >= 100) {
+          await Promise.all(promises);
+          promises.length = 0;
+        }
       }
 
-      if (promises.length >= 100) {
+      if (promises.length > 0) {
         await Promise.all(promises);
-        promises.length = 0;
       }
-    }
-
-    if (isRoot && promises.length > 0) {
-      await Promise.all(promises);
     }
   }
 
