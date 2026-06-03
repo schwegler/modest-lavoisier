@@ -948,39 +948,53 @@ class NativeNodesApp {
       return;
     }
 
+    const promises = [];
+
     for (const entry of entries) {
       if (entry.name.startsWith('.')) continue;
 
       const relativePath = currentRelative ? `${currentRelative}/${entry.name}` : entry.name;
 
       if (entry.isDirectory) {
-        await this._scanDirectoryTauri(basePath, relativePath);
+        promises.push(this._scanDirectoryTauri(basePath, relativePath));
       } else if (entry.isFile && entry.name.toLowerCase().endsWith('.md')) {
-        try {
-          const content = await fs.readTextFile(`${basePath}/${relativePath}`);
-          const pageName = relativePath.slice(0, -3); // Strip .md
+        promises.push((async () => {
+          try {
+            const content = await fs.readTextFile(`${basePath}/${relativePath}`);
+            const pageName = relativePath.slice(0, -3); // Strip .md
 
-          const fm = parseFrontmatter(content);
-          const pageObj = {
-            name: pageName,
-            content: content,
-            exists: true,
-            handle: `${basePath}/${relativePath}`, // Store full path string
-            tags: fm.tags,
-            fields: fm.fields
-          };
-          this.pages.set(pageName.toLowerCase(), pageObj);
+            const fm = parseFrontmatter(content);
+            const pageObj = {
+              name: pageName,
+              content: content,
+              exists: true,
+              handle: `${basePath}/${relativePath}`, // Store full path string
+              tags: fm.tags,
+              fields: fm.fields
+            };
+            this.pages.set(pageName.toLowerCase(), pageObj);
 
-          const parts = pageName.toLowerCase().split('/');
-          const flatName = parts[parts.length - 1];
-          if (!this.pageNamesIndex.has(flatName)) {
-            this.pageNamesIndex.set(flatName, []);
+            const parts = pageName.toLowerCase().split('/');
+            const flatName = parts[parts.length - 1];
+            if (!this.pageNamesIndex.has(flatName)) {
+              this.pageNamesIndex.set(flatName, []);
+            }
+            this.pageNamesIndex.get(flatName).push(pageObj);
+          } catch (err) {
+            console.error('Error reading file:', relativePath, err);
           }
-          this.pageNamesIndex.get(flatName).push(pageObj);
-        } catch (err) {
-          console.error('Error reading file:', relativePath, err);
-        }
+        })());
       }
+
+      // Batch promises to avoid memory issues and too many open files
+      if (promises.length >= 100) {
+        await Promise.all(promises);
+        promises.length = 0;
+      }
+    }
+
+    if (promises.length > 0) {
+      await Promise.all(promises);
     }
   }
 
