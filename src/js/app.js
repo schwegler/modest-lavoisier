@@ -76,6 +76,19 @@ class NativeNodesApp {
       graphCard: document.getElementById('graphCard'),
       graphCanvas: document.getElementById('graphCanvas'),
       graphFullscreenBtn: document.getElementById('graphFullscreenBtn'),
+      graphSearchInput: document.getElementById('graphSearchInput'),
+      clearGraphSearchBtn: document.getElementById('clearGraphSearchBtn'),
+      graphZoomInBtn: document.getElementById('graphZoomInBtn'),
+      graphZoomOutBtn: document.getElementById('graphZoomOutBtn'),
+      graphResetBtn: document.getElementById('graphResetBtn'),
+      graphPlayPauseBtn: document.getElementById('graphPlayPauseBtn'),
+      graphSettingsToggleBtn: document.getElementById('graphSettingsToggleBtn'),
+      graphSettingsDrawer: document.getElementById('graphSettingsDrawer'),
+      closeGraphSettingsBtn: document.getElementById('closeGraphSettingsBtn'),
+      graphRepulsionSlider: document.getElementById('graphRepulsionSlider'),
+      graphLinkDistSlider: document.getElementById('graphLinkDistSlider'),
+      repulsionValue: document.getElementById('repulsionValue'),
+      linkDistanceValue: document.getElementById('linkDistanceValue'),
 
       newNoteModal: document.getElementById('newNoteModal'),
       newNoteForm: document.getElementById('newNoteForm'),
@@ -410,7 +423,82 @@ class NativeNodesApp {
           <line x1="3" y1="21" x2="10" y2="14"></line>
         `;
       }
-      setTimeout(() => this.graph.resizeCanvas(), 250);
+      setTimeout(() => {
+        if (this.graph) {
+          this.graph.resizeCanvas();
+          this.graph.heatUp();
+        }
+      }, 250);
+    });
+
+    // Graph Overlay controls listeners
+    this.dom.graphZoomInBtn.addEventListener('click', () => this.graph && this.graph.zoomIn());
+    this.dom.graphZoomOutBtn.addEventListener('click', () => this.graph && this.graph.zoomOut());
+    this.dom.graphResetBtn.addEventListener('click', () => this.graph && this.graph.resetView());
+
+    this.dom.graphSearchInput.addEventListener('input', () => {
+      if (!this.graph) return;
+      const query = this.dom.graphSearchInput.value;
+      this.graph.setSearchFilter(query);
+      this.dom.clearGraphSearchBtn.style.display = query.trim() ? 'block' : 'none';
+    });
+    
+    this.dom.clearGraphSearchBtn.addEventListener('click', () => {
+      this.dom.graphSearchInput.value = '';
+      if (this.graph) this.graph.setSearchFilter('');
+      this.dom.clearGraphSearchBtn.style.display = 'none';
+    });
+
+    this.dom.graphPlayPauseBtn.addEventListener('click', () => {
+      if (!this.graph) return;
+      const isCurrentlyPlaying = this.graph.isPlaying;
+      const newPlayState = !isCurrentlyPlaying;
+      
+      this.graph.togglePlay(newPlayState);
+      this.dom.graphPlayPauseBtn.classList.toggle('active', newPlayState);
+      this.dom.graphPlayPauseBtn.title = newPlayState ? 'Pause Physics' : 'Play Physics';
+      
+      const pauseIcon = this.dom.graphPlayPauseBtn.querySelector('.pause-icon');
+      const playIcon = this.dom.graphPlayPauseBtn.querySelector('.play-icon');
+      
+      if (newPlayState) {
+        pauseIcon.style.display = 'block';
+        playIcon.style.display = 'none';
+      } else {
+        pauseIcon.style.display = 'none';
+        playIcon.style.display = 'block';
+      }
+    });
+
+    this.dom.graphSettingsToggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isHidden = this.dom.graphSettingsDrawer.style.display === 'none';
+      this.dom.graphSettingsDrawer.style.display = isHidden ? 'flex' : 'none';
+    });
+
+    this.dom.closeGraphSettingsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.dom.graphSettingsDrawer.style.display = 'none';
+    });
+
+    document.addEventListener('click', (e) => {
+      if (this.dom.graphSettingsDrawer && this.dom.graphSettingsDrawer.style.display !== 'none') {
+        if (!this.dom.graphSettingsDrawer.contains(e.target) && e.target !== this.dom.graphSettingsToggleBtn && !this.dom.graphSettingsToggleBtn.contains(e.target)) {
+          this.dom.graphSettingsDrawer.style.display = 'none';
+        }
+      }
+    });
+
+    this.dom.graphRepulsionSlider.addEventListener('input', () => {
+      const val = this.dom.graphRepulsionSlider.value;
+      this.dom.repulsionValue.textContent = val;
+      if (this.graph) this.graph.setRepulsion(val);
+    });
+    
+    this.dom.graphLinkDistSlider.addEventListener('input', () => {
+      const val = this.dom.graphLinkDistSlider.value;
+      this.dom.linkDistanceValue.textContent = val;
+      if (this.graph) this.graph.setLinkDistance(val);
     });
 
     // Initialize Theme Picker
@@ -1179,6 +1267,113 @@ class NativeNodesApp {
     } catch (e) {
       console.warn("Mermaid run error:", e);
     }
+
+    // Render backlinks
+    this.renderBacklinks();
+  }
+
+  /**
+   * Computes list of pages that link to the active page.
+   */
+  getIncomingLinks() {
+    if (!this.activePage) return [];
+    const activeKey = this.activePage.name.toLowerCase();
+    const incoming = [];
+    
+    for (const page of this.pages.values()) {
+      if (page.name.toLowerCase() === activeKey) continue;
+      
+      const extracted = extractWikiLinks(page.content);
+      for (const target of extracted) {
+        const resolvedName = this.resolveWikiLink(target);
+        if (resolvedName.toLowerCase() === activeKey) {
+          incoming.push(page);
+          break; // Avoid duplicates
+        }
+      }
+    }
+    return incoming;
+  }
+
+  /**
+   * Renders the backlinks section at the bottom of the preview panel.
+   */
+  renderBacklinks() {
+    const container = document.getElementById('backlinksContainer');
+    if (!container) return;
+
+    if (!this.activePage) {
+      container.innerHTML = '';
+      return;
+    }
+
+    const incoming = this.getIncomingLinks();
+    if (incoming.length === 0) {
+      container.innerHTML = `
+        <div class="backlinks-section">
+          <h3 class="backlinks-title">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+            </svg>
+            Incoming Links (0)
+          </h3>
+          <div class="backlinks-empty">No notes link to this page yet.</div>
+        </div>
+      `;
+      return;
+    }
+
+    let html = `
+      <div class="backlinks-section">
+        <h3 class="backlinks-title">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+          </svg>
+          Incoming Links (${incoming.length})
+        </h3>
+        <ul class="backlinks-list">
+    `;
+
+    for (const page of incoming) {
+      let cleanContent = stripFrontmatter(page.content);
+      // Clean up title header if exists
+      cleanContent = cleanContent.replace(/^\s*#\s+.*?\n/, '');
+      let snippet = cleanContent.trim().slice(0, 160);
+      if (snippet.length >= 160) {
+        snippet += '...';
+      }
+      snippet = escapeHTML(snippet);
+
+      html += `
+        <li class="backlink-item" data-page="${escapeHTML(page.name)}">
+          <div class="backlink-item-header">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+            </svg>
+            <span class="backlink-page-name">${escapeHTML(page.name)}</span>
+          </div>
+          ${snippet ? `<div class="backlink-snippet">${snippet}</div>` : ''}
+        </li>
+      `;
+    }
+
+    html += `
+        </ul>
+      </div>
+    `;
+
+    container.innerHTML = html;
+
+    // Click navigation
+    container.querySelectorAll('.backlink-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const pageName = item.getAttribute('data-page');
+        window.location.hash = `#/page/${encodeURIComponent(pageName)}`;
+      });
+    });
   }
 
   /**

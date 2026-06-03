@@ -1,6 +1,6 @@
 [package]
 name = "native-nodes"
-version = "1.0.0"
+version = "1.1.0"
 description = "Offline-capable local Markdown Wiki note-taking desktop application."
 authors = ["Native Nodes Maintainers"]
 edition = "2021"

@@ -22,7 +22,7 @@
     <!-- Sidebar -->
     <aside id="sidebar" class="sidebar glass">
       <div class="sidebar-header" data-tauri-drag-region>
-        <svg class="logo-icon" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <svg class="logo-icon" viewBox="70 70 372 372" fill="none" xmlns="http://www.w3.org/2000/svg">
           <circle cx="256" cy="256" r="180" stroke="currentColor" stroke-width="8" stroke-dasharray="16 16" opacity="0.3" />
           <line x1="200" y1="290" x2="270" y2="210" stroke="#6366f1" stroke-width="24" stroke-linecap="round" />
           <line x1="270" y1="210" x2="320" y2="310" stroke="#6366f1" stroke-width="24" stroke-linecap="round" />
@@ -225,6 +225,9 @@
           <div id="previewContent" class="markdown-body">
             <!-- Rendered HTML -->
           </div>
+          <div id="backlinksContainer" class="backlinks-container markdown-body">
+            <!-- Populated by JS -->
+          </div>
         </div>
 
         <!-- Floating Graph Widget -->
@@ -247,6 +250,78 @@
           </div>
           <div class="graph-panel-body">
             <canvas id="graphCanvas"></canvas>
+            
+            <!-- Floating Search bar overlay -->
+            <div class="graph-search-overlay glass">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input type="text" id="graphSearchInput" placeholder="Filter nodes..." autocomplete="off">
+              <button id="clearGraphSearchBtn" class="clear-search-btn" title="Clear filter" style="display: none;">&times;</button>
+            </div>
+            
+            <!-- Floating Navigation & Physics Action buttons -->
+            <div class="graph-actions-overlay">
+              <button id="graphZoomInBtn" class="graph-action-btn" title="Zoom In">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+              </button>
+              <button id="graphZoomOutBtn" class="graph-action-btn" title="Zoom Out">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+              </button>
+              <button id="graphResetBtn" class="graph-action-btn" title="Recenter View">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M15 3h6v6"></path>
+                  <path d="M9 21H3v-6"></path>
+                  <path d="M21 3l-7 7"></path>
+                  <path d="M3 21l7-7"></path>
+                </svg>
+              </button>
+              <button id="graphPlayPauseBtn" class="graph-action-btn active" title="Pause Physics">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="pause-icon">
+                  <rect x="6" y="4" width="4" height="16"></rect>
+                  <rect x="14" y="4" width="4" height="16"></rect>
+                </svg>
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="play-icon" style="display: none;">
+                  <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                </svg>
+              </button>
+              <button id="graphSettingsToggleBtn" class="graph-action-btn" title="Physics Settings">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="3"></circle>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+              </button>
+            </div>
+
+            <!-- Floating Settings drawer overlay -->
+            <div id="graphSettingsDrawer" class="graph-settings-drawer glass" style="display: none;">
+              <div class="drawer-header">
+                <h4>Physics Settings</h4>
+                <button id="closeGraphSettingsBtn" class="close-drawer-btn">&times;</button>
+              </div>
+              <div class="drawer-body">
+                <div class="slider-group">
+                  <div class="slider-header">
+                    <span>Node Spacing (Repulsion)</span>
+                    <span id="repulsionValue">350</span>
+                  </div>
+                  <input type="range" id="graphRepulsionSlider" min="100" max="800" step="25" value="350">
+                </div>
+                <div class="slider-group">
+                  <div class="slider-header">
+                    <span>Link Distance</span>
+                    <span id="linkDistanceValue">90</span>
+                  </div>
+                  <input type="range" id="graphLinkDistSlider" min="40" max="200" step="10" value="90">
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

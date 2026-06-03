@@ -41,6 +41,13 @@ export class WikiGraph {
     this.centerStrength = 0.02; // Attractor pull to center
     this.damping = 0.82;        // Friction coefficient
 
+    // Stabilization & features
+    this.alpha = 1.0;           // Simulation temperature
+    this.alphaDecay = 0.025;    // Cool down rate per frame
+    this.alphaMin = 0.005;      // Stop simulation below this threshold
+    this.isPlaying = true;      // Play/pause physics
+    this.searchFilter = '';     // Node label filter string
+
     this.activeNodeId = null;
     this.isDark = false;
     this.running = false;
@@ -83,6 +90,18 @@ export class WikiGraph {
   }
 
   /**
+   * Wakes up or resets simulation temperature.
+   */
+  heatUp() {
+    this.alpha = 1.0;
+    if (this.isPlaying) {
+      this.start();
+    } else {
+      this.draw(); // Make sure to render if we are paused
+    }
+  }
+
+  /**
    * Re-populates simulation data.
    * @param {Array<{name: string, exists: boolean}>} pages 
    * @param {Array<{source: string, target: string}>} linksData 
@@ -98,11 +117,24 @@ export class WikiGraph {
     const cx = rect.width / 2;
     const cy = rect.height / 2;
 
+    // Calculate degree of each page
+    const degrees = new Map();
+    for (const link of linksData) {
+      const src = link.source.toLowerCase();
+      const tgt = link.target.toLowerCase();
+      degrees.set(src, (degrees.get(src) || 0) + 1);
+      degrees.set(tgt, (degrees.get(tgt) || 0) + 1);
+    }
+
     // Build node elements
     this.nodes = pages.map(page => {
       const key = page.name.toLowerCase();
       const old = oldNodes.get(key);
       const isCurrent = activeNodeId && page.name.toLowerCase() === activeNodeId.toLowerCase();
+      
+      const degree = degrees.get(key) || 0;
+      const baseRadius = isCurrent ? 12 : 8;
+      const radius = baseRadius + Math.min(degree * 1.2, 10); // cap degree bonus at 10px
 
       return {
         id: page.name,
@@ -112,7 +144,8 @@ export class WikiGraph {
         y: old ? old.y : cy + (Math.random() - 0.5) * 150,
         vx: old ? old.vx : 0,
         vy: old ? old.vy : 0,
-        radius: isCurrent ? 12 : 8,
+        radius: radius,
+        degree: degree,
         isDragging: false
       };
     });
@@ -130,7 +163,7 @@ export class WikiGraph {
     }
 
     // Wake up simulation
-    this.start();
+    this.heatUp();
   }
 
   /**
@@ -151,7 +184,10 @@ export class WikiGraph {
    */
   initEvents() {
     // Resize handler
-    window.addEventListener('resize', () => this.resizeCanvas());
+    window.addEventListener('resize', () => {
+      this.resizeCanvas();
+      this.heatUp();
+    });
 
     // Mouse movements
     this.canvas.addEventListener('mousedown', e => {
@@ -165,6 +201,7 @@ export class WikiGraph {
         hitNode.isDragging = true;
         this.dragOffset.x = worldPos.x - hitNode.x;
         this.dragOffset.y = worldPos.y - hitNode.y;
+        this.heatUp();
       } else {
         // Start pan
         this.isPanning = true;
@@ -181,15 +218,18 @@ export class WikiGraph {
         this.draggedNode.y = worldPos.y - this.dragOffset.y;
         this.draggedNode.vx = 0;
         this.draggedNode.vy = 0;
+        this.heatUp();
       } else if (this.isPanning) {
         this.panX = e.clientX - this.startX;
         this.panY = e.clientY - this.startY;
+        this.draw();
       } else {
         // Update hover
         const node = this.findNodeAt(worldPos.x, worldPos.y);
         if (node !== this.hoveredNode) {
           this.hoveredNode = node;
           this.canvas.style.cursor = node ? 'pointer' : 'default';
+          this.draw();
         }
       }
     });
@@ -207,6 +247,7 @@ export class WikiGraph {
           }
         }
         this.draggedNode = null;
+        this.heatUp();
       }
       this.isPanning = false;
       this.mouseDownPos = null;
@@ -236,6 +277,8 @@ export class WikiGraph {
       // Readjust pan so mouse remains over the same world coordinate
       this.panX = mouseX - worldX * this.zoom;
       this.panY = mouseY - worldY * this.zoom;
+      
+      this.heatUp();
     }, { passive: false });
   }
 
@@ -258,9 +301,19 @@ export class WikiGraph {
    * Main simulation frame physics update.
    */
   tick() {
+    if (!this.isPlaying) return;
+
     const rect = this.canvas.getBoundingClientRect();
     const cx = rect.width / 2;
     const cy = rect.height / 2;
+
+    // Apply alpha decay
+    this.alpha *= (1 - this.alphaDecay);
+    if (this.alpha < this.alphaMin) {
+      this.alpha = 0;
+      this.stop();
+      return;
+    }
 
     // 1. Repulsion between all node pairs
     for (let i = 0; i < this.nodes.length; i++) {
@@ -274,7 +327,8 @@ export class WikiGraph {
         const dist = Math.sqrt(distSq);
 
         if (dist < 320) {
-          const f = this.charge / distSq;
+          // Repulsion force with a buffer to prevent extreme forces
+          const f = (this.charge * this.alpha) / (distSq + 100);
           const fx = f * (dx / dist);
           const fy = f * (dy / dist);
 
@@ -300,7 +354,7 @@ export class WikiGraph {
       const dist = Math.sqrt(dx * dx + dy * dy) || 0.1;
 
       // Spring displacement force
-      const f = (dist - this.linkDistance) * this.linkStrength;
+      const f = (dist - this.linkDistance) * this.linkStrength * this.alpha;
       const fx = f * (dx / dist);
       const fy = f * (dy / dist);
 
@@ -314,13 +368,49 @@ export class WikiGraph {
       }
     }
 
-    // 3. Update positions, apply center gravity, friction damping
+    // 3. Collision avoidance force (separates overlapping nodes)
+    for (let i = 0; i < this.nodes.length; i++) {
+      const n1 = this.nodes[i];
+      for (let j = i + 1; j < this.nodes.length; j++) {
+        const n2 = this.nodes[j];
+        const dx = n2.x - n1.x;
+        const dy = n2.y - n1.y;
+        const minDist = n1.radius + n2.radius + 12; // radius + padding
+        const distSq = dx * dx + dy * dy;
+        if (distSq < minDist * minDist) {
+          const dist = Math.sqrt(distSq) || 0.1;
+          const overlap = minDist - dist;
+          const forceStrength = overlap * 0.15 * this.alpha;
+          const fx = (dx / dist) * forceStrength;
+          const fy = (dy / dist) * forceStrength;
+
+          if (!n1.isDragging) {
+            n1.vx -= fx;
+            n1.vy -= fy;
+          }
+          if (!n2.isDragging) {
+            n2.vx += fx;
+            n2.vy += fy;
+          }
+        }
+      }
+    }
+
+    // 4. Update positions, apply center gravity, friction damping
+    const maxVelocity = 10; // Cap node movement speed to stop wild oscillations
     for (const node of this.nodes) {
       if (node.isDragging) continue;
 
       // Center force pull
-      node.vx += (cx - node.x) * this.centerStrength;
-      node.vy += (cy - node.y) * this.centerStrength;
+      node.vx += (cx - node.x) * this.centerStrength * this.alpha;
+      node.vy += (cy - node.y) * this.centerStrength * this.alpha;
+
+      // Cap speed
+      const speed = Math.sqrt(node.vx * node.vx + node.vy * node.vy);
+      if (speed > maxVelocity) {
+        node.vx = (node.vx / speed) * maxVelocity;
+        node.vy = (node.vy / speed) * maxVelocity;
+      }
 
       node.x += node.vx;
       node.y += node.vy;
@@ -364,6 +454,19 @@ export class WikiGraph {
         (link.source.id.toLowerCase() === this.activeNodeId.toLowerCase() || 
          link.target.id.toLowerCase() === this.activeNodeId.toLowerCase());
 
+      let linkOpacity = 1.0;
+      if (this.searchFilter) {
+        const query = this.searchFilter.toLowerCase();
+        const srcMatches = link.source.id.toLowerCase().includes(query);
+        const tgtMatches = link.target.id.toLowerCase().includes(query);
+        if (!srcMatches || !tgtMatches) {
+          linkOpacity = 0.15;
+        }
+      }
+
+      this.ctx.save();
+      this.ctx.globalAlpha = linkOpacity;
+
       this.ctx.beginPath();
       this.ctx.moveTo(link.source.x, link.source.y);
       this.ctx.lineTo(link.target.x, link.target.y);
@@ -376,12 +479,26 @@ export class WikiGraph {
         this.ctx.lineWidth = 1.0;
       }
       this.ctx.stroke();
+      this.ctx.restore();
     }
 
     // 2. Draw node points
     for (const node of this.nodes) {
       const isHovered = node === this.hoveredNode;
       const isCurrent = node.isCurrent;
+
+      let nodeOpacity = 1.0;
+      let matchesFilter = true;
+      if (this.searchFilter) {
+        const query = this.searchFilter.toLowerCase();
+        matchesFilter = node.id.toLowerCase().includes(query);
+        if (!matchesFilter) {
+          nodeOpacity = 0.15;
+        }
+      }
+
+      this.ctx.save();
+      this.ctx.globalAlpha = nodeOpacity;
 
       this.ctx.beginPath();
       
@@ -418,8 +535,22 @@ export class WikiGraph {
         this.ctx.fill();
       }
 
+      // Check if node is 1 degree of separation away from the active note
+      let isNeighbour = false;
+      if (this.activeNodeId) {
+        const activeKey = this.activeNodeId.toLowerCase();
+        isNeighbour = this.links.some(link => 
+          (link.source.id.toLowerCase() === activeKey && link.target.id.toLowerCase() === node.id.toLowerCase()) ||
+          (link.target.id.toLowerCase() === activeKey && link.source.id.toLowerCase() === node.id.toLowerCase())
+        );
+      }
+
       // 3. Draw text labels
-      const showLabel = this.zoom > 0.6 || isHovered || isCurrent;
+      const showLabel = isHovered || 
+                        isCurrent || 
+                        isNeighbour || 
+                        (this.searchFilter && matchesFilter) || 
+                        (!this.activeNodeId && this.zoom > 0.6);
       if (showLabel) {
         this.ctx.save();
         this.ctx.font = isCurrent ? 'bold 11px sans-serif' : '10px sans-serif';
@@ -435,8 +566,95 @@ export class WikiGraph {
         this.ctx.fillText(node.id, node.x, node.y + node.radius + 5);
         this.ctx.restore();
       }
+
+      this.ctx.restore();
     }
 
     this.ctx.restore();
+  }
+
+  // Interactive controls helper methods
+  zoomIn() {
+    this.zoomToScale(1.25);
+  }
+
+  zoomOut() {
+    this.zoomToScale(0.8);
+  }
+
+  zoomToScale(factor) {
+    const rect = this.canvas.getBoundingClientRect();
+    const cx = rect.width / 2;
+    const cy = rect.height / 2;
+
+    const worldX = (cx - this.panX) / this.zoom;
+    const worldY = (cy - this.panY) / this.zoom;
+
+    this.zoom = Math.max(0.3, Math.min(3.0, this.zoom * factor));
+
+    this.panX = cx - worldX * this.zoom;
+    this.panY = cy - worldY * this.zoom;
+
+    this.heatUp();
+  }
+
+  resetView() {
+    if (this.nodes.length === 0) return;
+
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+
+    for (const node of this.nodes) {
+      if (node.x < minX) minX = node.x;
+      if (node.x > maxX) maxX = node.x;
+      if (node.y < minY) minY = node.y;
+      if (node.y > maxY) maxY = node.y;
+    }
+
+    const rect = this.canvas.getBoundingClientRect();
+    const w = rect.width;
+    const h = rect.height;
+
+    const ncx = (minX + maxX) / 2;
+    const ncy = (minY + maxY) / 2;
+
+    const ccx = w / 2;
+    const ccy = h / 2;
+
+    const nW = Math.max(maxX - minX, 50);
+    const nH = Math.max(maxY - minY, 50);
+
+    const zoomX = (w * 0.7) / nW;
+    const zoomY = (h * 0.7) / nH;
+    this.zoom = Math.max(0.4, Math.min(zoomX, zoomY, 1.2));
+
+    this.panX = ccx - ncx * this.zoom;
+    this.panY = ccy - ncy * this.zoom;
+
+    this.heatUp();
+  }
+
+  setSearchFilter(query) {
+    this.searchFilter = query.trim();
+    this.draw();
+  }
+
+  setRepulsion(val) {
+    this.charge = -Math.abs(val);
+    this.heatUp();
+  }
+
+  setLinkDistance(val) {
+    this.linkDistance = Number(val);
+    this.heatUp();
+  }
+
+  togglePlay(isPlaying) {
+    this.isPlaying = isPlaying;
+    if (isPlaying) {
+      this.heatUp();
+    } else {
+      this.stop();
+    }
   }
 }

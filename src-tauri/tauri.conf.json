@@ -1,6 +1,6 @@
 {
   "productName": "Native Nodes",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "identifier": "com.native-nodes.notes",
   "build": {
     "frontendDist": "../src",

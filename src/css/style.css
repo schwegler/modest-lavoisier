@@ -1514,7 +1514,331 @@ dialog.modal::backdrop {
   transform: translateY(-1px);
 }
 
+/* ==========================================================================
+   BACKLINKS (INCOMING LINKS) STYLING
+   ========================================================================== */
+.backlinks-container {
+  margin-top: 48px;
+  padding-top: 32px;
+  border-top: 1px solid var(--border);
+}
+
+.backlinks-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.backlinks-title {
+  font-family: var(--font-display);
+  font-size: 15px !important;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 !important;
+  border-bottom: none !important;
+  padding-bottom: 0 !important;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.backlinks-title svg {
+  color: var(--accent);
+}
+
+.backlinks-empty {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 12px 16px;
+  background: var(--active-bg);
+  border-radius: 12px;
+  border: 1px dashed var(--border);
+}
+
+.backlinks-list {
+  list-style: none !important;
+  padding-left: 0 !important;
+  margin: 0 !important;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.backlink-item {
+  padding: 14px 18px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: transform var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  user-select: none;
+}
+
+.backlink-item:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+  background: var(--active-bg);
+  box-shadow: var(--card-shadow);
+}
+
+.backlink-item-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--accent);
+}
+
+.backlink-item-header svg {
+  flex-shrink: 0;
+}
+
+.backlink-page-name {
+  font-family: var(--font-sans);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.backlink-snippet {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* ==========================================================================
+   GRAPH CONTROLS OVERLAYS
+   ========================================================================== */
+.graph-search-overlay {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  z-index: 15;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.graph-search-overlay:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 4px 12px var(--accent-glow);
+}
+
+.graph-search-overlay svg {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.graph-search-overlay input {
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--text);
+  flex-grow: 1;
+  width: 100%;
+}
+
+.graph-search-overlay input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.clear-search-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.clear-search-btn:hover {
+  color: var(--broken-link);
+}
+
+/* Floating Actions bar overlay */
+.graph-actions-overlay {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 15;
+}
+
+.graph-action-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--panel-bg);
+  backdrop-filter: blur(10px) saturate(120%);
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
+  border: 1px solid var(--border);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+  transition: all var(--transition-fast);
+}
+
+.graph-action-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  transform: translateY(-1px);
+  background: var(--active-bg);
+}
+
+.graph-action-btn:active {
+  transform: scale(0.95);
+}
+
+.graph-action-btn.active {
+  color: var(--accent);
+  background: var(--active-bg);
+  border-color: var(--accent);
+}
+
+/* Floating settings drawer */
+.graph-settings-drawer {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  width: 210px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+}
+
+.drawer-header h4 {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.close-drawer-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0;
+}
+
+.close-drawer-btn:hover {
+  color: var(--text);
+}
+
+.slider-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.slider-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.slider-group input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  outline: none;
+}
+
+.slider-group input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  transition: transform var(--transition-fast);
+}
+
+.slider-group input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+/* Adjustments for graph panel when it is fullscreen */
+.graph-panel.fullscreen .graph-search-overlay {
+  max-width: 320px;
+  top: 16px;
+  left: 16px;
+}
+
+.graph-panel.fullscreen .graph-actions-overlay {
+  bottom: 24px;
+  right: 24px;
+  gap: 10px;
+}
+
+.graph-panel.fullscreen .graph-action-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+}
+
+.graph-panel.fullscreen .graph-settings-drawer {
+  bottom: 24px;
+  left: 24px;
+  width: 250px;
+}
+
 /* Tauri Desktop Window Overrides */
+.tauri-window.tauri-mac .sidebar-header {
+  padding-top: 38px; /* Leave space for macOS traffic light control buttons */
+}
+
 .tauri-window.tauri-mac header.main-header {
   padding-left: 80px; /* Leave space for macOS traffic light control buttons */
   -webkit-app-region: drag;
