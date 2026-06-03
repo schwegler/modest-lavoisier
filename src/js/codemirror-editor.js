@@ -126,6 +126,10 @@ const livePreviewPlugin = ViewPlugin.fromClass(class {
               }
             }
           }
+          // 6. GFM Tables
+          else if (type === 'Table') {
+            builder.push(Decoration.mark({ class: 'cm-table-row' }).range(node.from, node.to));
+          }
         }
       });
 
@@ -198,9 +202,10 @@ const customHighlightStyle = HighlightStyle.define([
 ]);
 
 export class CodeMirrorEditor {
-  constructor({ el, initialValue = '', onChange, onWikiLinkClick, theme = 'dracula' }) {
+  constructor({ el, initialValue = '', onChange, onWikiLinkClick, onSelectionChange, theme = 'dracula' }) {
     this.onChange = onChange;
     this.onWikiLinkClick = onWikiLinkClick;
+    this.onSelectionChange = onSelectionChange;
     this.themeConfig = new Compartment();
 
     const state = EditorState.create({
@@ -224,6 +229,9 @@ export class CodeMirrorEditor {
           if (update.docChanged && this.onChange) {
             this.onChange();
           }
+          if (this.onSelectionChange) {
+            this.onSelectionChange(update.view);
+          }
         }),
         EditorView.domEventHandlers({
           click: (event, view) => {
@@ -238,6 +246,15 @@ export class CodeMirrorEditor {
                   return true;
                 }
               }
+            }
+          },
+          dragover: (event, view) => {
+            const types = event.dataTransfer.types;
+            if (types && (types.includes('application/x-page-name') || types.includes('Files'))) {
+              event.preventDefault();
+              event.stopPropagation();
+              event.dataTransfer.dropEffect = 'copy';
+              return true;
             }
           },
           drop: (event, view) => {
@@ -337,6 +354,12 @@ export class CodeMirrorEditor {
         color: "var(--accent)",
         textDecoration: "underline",
         cursor: "pointer"
+      },
+      ".cm-table-row": {
+        fontFamily: "var(--font-mono) !important",
+        fontSize: "14px",
+        color: "var(--text-muted)",
+        letterSpacing: "0",
       }
     });
   }
@@ -351,28 +374,97 @@ export class CodeMirrorEditor {
       let selectTo = range.to;
 
       switch (type) {
-        case 'bold':
+        case 'bold': {
+          // Check if selection starts/ends with '**'
+          if (selectedText.startsWith('**') && selectedText.endsWith('**') && selectedText.length >= 4) {
+            const unwrapped = selectedText.slice(2, -2);
+            return {
+              changes: { from: range.from, to: range.to, insert: unwrapped },
+              range: EditorSelection.range(range.from, range.from + unwrapped.length)
+            };
+          }
+          // Check if surrounding text has '**'
+          const before = view.state.sliceDoc(range.from - 2, range.from);
+          const after = view.state.sliceDoc(range.to, range.to + 2);
+          if (before === '**' && after === '**') {
+            return {
+              changes: { from: range.from - 2, to: range.to + 2, insert: selectedText },
+              range: EditorSelection.range(range.from - 2, range.from - 2 + selectedText.length)
+            };
+          }
+          // Otherwise, apply bold
           insertText = `**${selectedText || 'bold text'}**`;
           selectFrom += 2;
           selectTo = selectFrom + (selectedText || 'bold text').length;
           break;
-        case 'italic':
+        }
+        case 'italic': {
+          // Check if selection starts/ends with '*' (excluding double stars)
+          if (selectedText.startsWith('*') && selectedText.endsWith('*') && 
+              !(selectedText.startsWith('**') && selectedText.endsWith('**')) && 
+              selectedText.length >= 2) {
+            const unwrapped = selectedText.slice(1, -1);
+            return {
+              changes: { from: range.from, to: range.to, insert: unwrapped },
+              range: EditorSelection.range(range.from, range.from + unwrapped.length)
+            };
+          }
+          // Check if surrounding text has '*' (excluding double stars)
+          const before1 = view.state.sliceDoc(range.from - 1, range.from);
+          const after1 = view.state.sliceDoc(range.to, range.to + 1);
+          const before2 = view.state.sliceDoc(range.from - 2, range.from);
+          const after2 = view.state.sliceDoc(range.to, range.to + 2);
+          if (before1 === '*' && after1 === '*' && !(before2 === '**' && after2 === '**')) {
+            return {
+              changes: { from: range.from - 1, to: range.to + 1, insert: selectedText },
+              range: EditorSelection.range(range.from - 1, range.from - 1 + selectedText.length)
+            };
+          }
+          // Otherwise, apply italic
           insertText = `*${selectedText || 'italic text'}*`;
           selectFrom += 1;
           selectTo = selectFrom + (selectedText || 'italic text').length;
           break;
-        case 'code':
+        }
+        case 'code': {
+          // Check if selection starts/ends with '`'
+          if (selectedText.startsWith('`') && selectedText.endsWith('`') && selectedText.length >= 2) {
+            const unwrapped = selectedText.slice(1, -1);
+            return {
+              changes: { from: range.from, to: range.to, insert: unwrapped },
+              range: EditorSelection.range(range.from, range.from + unwrapped.length)
+            };
+          }
+          // Check if surrounding text has '`'
+          const before = view.state.sliceDoc(range.from - 1, range.from);
+          const after = view.state.sliceDoc(range.to, range.to + 1);
+          if (before === '`' && after === '`') {
+            return {
+              changes: { from: range.from - 1, to: range.to + 1, insert: selectedText },
+              range: EditorSelection.range(range.from - 1, range.from - 1 + selectedText.length)
+            };
+          }
+          // Otherwise, apply code
           insertText = `\`${selectedText || 'code'}\``;
           selectFrom += 1;
           selectTo = selectFrom + (selectedText || 'code').length;
           break;
-        case 'heading':
+        }
+        case 'heading': {
           const line = view.state.doc.lineAt(range.from);
+          if (line.text.startsWith('### ')) {
+            // Remove '### ' from start of the line
+            return {
+              changes: { from: line.from, to: line.from + 4, insert: '' },
+              range: EditorSelection.range(Math.max(line.from, range.from - 4), Math.max(line.from, range.to - 4))
+            };
+          }
           const isAtStart = range.from === line.from;
           insertText = isAtStart ? `### ${selectedText}` : `\n### ${selectedText}`;
           selectFrom += isAtStart ? 4 : 5;
           selectTo = selectFrom + selectedText.length;
           break;
+        }
         case 'link':
           insertText = `[[${selectedText || 'Link Target'}]]`;
           selectFrom += 2;

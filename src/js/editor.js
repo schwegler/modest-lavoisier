@@ -54,6 +54,12 @@ export function renderMarkdown(markdown, existingPages = new Set()) {
 
   // Configure custom marked renderer
   const renderer = {
+    table(header, body) {
+      return `<table data-sortable="true">
+        <thead>${header}</thead>
+        <tbody>${body}</tbody>
+      </table>`;
+    },
     code(codeOrObj, infostring, escaped) {
       let codeText = '';
       let lang = '';
@@ -165,11 +171,25 @@ export function renderMarkdown(markdown, existingPages = new Set()) {
   marked.use({ renderer });
   
   // Custom marked options for tables, gfm, lists, etc.
-  const rawHTML = marked.parse(preprocessed, {
+  let rawHTML = marked.parse(preprocessed, {
     gfm: true,
     breaks: true
   });
   
+  // Post-process footnotes in HTML
+  // 1. Process Footnote Definitions: convert <p>[^label]: content</p> to block divs
+  rawHTML = rawHTML.replace(/<p>\[\^([^\]]+)\]:\s*([\s\S]*?)<\/p>/g, (match, label, content) => {
+    return `<div class="footnote-definition" id="fn-${label}">
+      <span class="footnote-label"><a href="#fnref-${label}">[^${label}]</a>:</span>
+      <span class="footnote-content">${content}</span>
+    </div>`;
+  });
+
+  // 2. Process Footnote References: convert [^label] (not followed by colon) to sup link
+  rawHTML = rawHTML.replace(/\[\^([^\]:]+)\](?!:)/g, (match, label) => {
+    return `<sup class="footnote-ref" id="fnref-${label}"><a href="#fn-${label}">${label}</a></sup>`;
+  });
+
   return DOMPurify.sanitize(rawHTML, {
     ADD_URI_SAFE_ATTR: ['src'],
     ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|xxx|wikilink|blob|data):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i

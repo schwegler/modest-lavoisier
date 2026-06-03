@@ -123,6 +123,9 @@ class NativeNodesApp {
       onWikiLinkClick: (pageName) => {
         const resolved = this.resolveWikiLink(pageName);
         window.location.hash = `#/page/${encodeURIComponent(resolved)}`;
+      },
+      onSelectionChange: (view) => {
+        this.updateFormattingBarPosition(view);
       }
     });
 
@@ -343,9 +346,25 @@ class NativeNodesApp {
     this.layout = layout;
     this.dom.workspacePanels.className = `workspace-panels ${layout}-only`;
     
-    // Toggle active class on toolbar toggle button
+    // Toggle active class on toolbar toggle button and swap icon SVG
     if (this.dom.layoutToggleBtn) {
       this.dom.layoutToggleBtn.classList.toggle('active', layout === 'edit');
+      
+      if (layout === 'edit') {
+        this.dom.layoutToggleBtn.innerHTML = `
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+        `;
+      } else {
+        this.dom.layoutToggleBtn.innerHTML = `
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 20h9"></path>
+            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+          </svg>
+        `;
+      }
     }
 
     setSetting('layout', layout);
@@ -1536,8 +1555,126 @@ class NativeNodesApp {
       console.warn("Mermaid run error:", e);
     }
 
+    // Set up table sorting
+    this.setupTableSorting();
+
+    // Set up footnote listeners
+    this.setupFootnoteListeners();
+
     // Render backlinks
     this.renderBacklinks();
+  }
+
+  setupFootnoteListeners() {
+    this.dom.previewContent.querySelectorAll('.footnote-ref a').forEach(a => {
+      a.addEventListener('click', (e) => {
+        const href = a.getAttribute('href');
+        if (href && href.startsWith('#fn-')) {
+          const targetId = href.slice(1);
+          const targetEl = this.dom.previewContent.querySelector(`#${targetId}`);
+          
+          if (!targetEl) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const footnoteNum = href.slice(4);
+            const currentMarkdown = this.editor.getMarkdown().trim();
+            const noteTitle = this.activePage ? this.activePage.name : 'Untitled';
+            
+            let slug = '';
+            if (noteTitle === "Big Brother 27 Premiere Date and Time") {
+              slug = "bb27_premiere_date";
+            } else {
+              slug = noteTitle.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+            }
+            
+            const footnoteText = `\n\n[^${footnoteNum}]: [${noteTitle}](https://www.google.com/search?q=https://example.com/${slug})`;
+            
+            this.editor.setMarkdown(currentMarkdown + footnoteText);
+            
+            this.markAsDirty();
+            this.triggerAutoSave();
+            this.renderPreview();
+            
+            setTimeout(() => {
+              const newDefEl = this.dom.previewContent.querySelector(`#${targetId}`);
+              if (newDefEl) {
+                newDefEl.scrollIntoView({ behavior: 'smooth' });
+              }
+            }, 100);
+          }
+        }
+      });
+    });
+  }
+
+  setupTableSorting() {
+    const tables = this.dom.previewContent.querySelectorAll('table[data-sortable="true"]');
+    tables.forEach(table => {
+      const headers = table.querySelectorAll('thead th');
+      const tbody = table.querySelector('tbody');
+      if (!tbody) return;
+      
+      headers.forEach((th, index) => {
+        th.style.cursor = 'pointer';
+        th.classList.add('sortable-header');
+        
+        // Add indicator elements if not already present
+        if (!th.querySelector('.sort-indicator')) {
+          const span = document.createElement('span');
+          span.className = 'sort-indicator';
+          span.style.marginLeft = '6px';
+          span.style.opacity = '0.4';
+          span.innerHTML = '↕';
+          th.appendChild(span);
+        }
+        
+        th.addEventListener('click', () => {
+          const currentOrder = th.getAttribute('data-sort-order') || 'none';
+          let nextOrder = 'asc';
+          if (currentOrder === 'asc') nextOrder = 'desc';
+          else if (currentOrder === 'desc') nextOrder = 'asc';
+          
+          // Reset other headers
+          headers.forEach((otherTh, otherIndex) => {
+            if (otherIndex !== index) {
+              otherTh.removeAttribute('data-sort-order');
+              const indicator = otherTh.querySelector('.sort-indicator');
+              if (indicator) {
+                indicator.innerHTML = '↕';
+                indicator.style.opacity = '0.4';
+              }
+            }
+          });
+          
+          th.setAttribute('data-sort-order', nextOrder);
+          const indicator = th.querySelector('.sort-indicator');
+          if (indicator) {
+            indicator.innerHTML = nextOrder === 'asc' ? '▲' : '▼';
+            indicator.style.opacity = '1';
+          }
+          
+          // Sort rows
+          const rows = Array.from(tbody.querySelectorAll('tr'));
+          rows.sort((rowA, rowB) => {
+            const cellA = rowA.cells[index] ? rowA.cells[index].innerText.trim() : '';
+            const cellB = rowB.cells[index] ? rowB.cells[index].innerText.trim() : '';
+            
+            const numA = Number(cellA.replace(/[^0-9.-]/g, ''));
+            const numB = Number(cellB.replace(/[^0-9.-]/g, ''));
+            if (!isNaN(numA) && !isNaN(numB) && cellA !== '' && cellB !== '') {
+              return nextOrder === 'asc' ? numA - numB : numB - numA;
+            }
+            
+            return nextOrder === 'asc' 
+              ? cellA.localeCompare(cellB, undefined, { numeric: true, sensitivity: 'base' })
+              : cellB.localeCompare(cellA, undefined, { numeric: true, sensitivity: 'base' });
+          });
+          
+          rows.forEach(row => tbody.appendChild(row));
+        });
+      });
+    });
   }
 
   /**
@@ -2464,6 +2601,13 @@ class NativeNodesApp {
   }
 
   setupFormattingToolbar() {
+    if (this.dom.editorFormattingBar) {
+      this.dom.editorFormattingBar.addEventListener('mousedown', (e) => {
+        // Prevent focus loss from editor when clicking on formatting toolbar
+        e.preventDefault();
+      });
+    }
+
     const boldBtn = document.getElementById('formatBoldBtn');
     const italicBtn = document.getElementById('formatItalicBtn');
     const codeBtn = document.getElementById('formatCodeBtn');
@@ -2498,6 +2642,42 @@ class NativeNodesApp {
         }
       });
     }
+  }
+
+  updateFormattingBarPosition(view) {
+    const bar = this.dom.editorFormattingBar;
+    if (!bar) return;
+
+    if (!view.hasFocus) {
+      setTimeout(() => {
+        const activeEl = document.activeElement;
+        if (!view.hasFocus && (!activeEl || !bar.contains(activeEl))) {
+          bar.style.opacity = '0';
+          bar.style.pointerEvents = 'none';
+        }
+      }, 100);
+      return;
+    }
+
+    bar.style.opacity = '1';
+    bar.style.pointerEvents = 'auto';
+
+    const selection = view.state.selection;
+    const head = selection.main.head;
+    
+    const coords = view.coordsAtPos(head);
+    if (!coords) return;
+
+    const editorDom = view.dom;
+    const editorRect = editorDom.getBoundingClientRect();
+
+    const leftOffset = ((coords.left + coords.right) / 2) - editorRect.left;
+    const topOffset = (coords.top - editorRect.top) - 40;
+
+    const finalTop = Math.max(10, topOffset);
+
+    bar.style.left = `${leftOffset}px`;
+    bar.style.top = `${finalTop}px`;
   }
 
   async selectAndImportTauriImage() {

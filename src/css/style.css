@@ -309,20 +309,6 @@ aside.sidebar {
   border-bottom: 1px solid var(--border);
 }
 
-.logo-icon {
-  width: 32px;
-  height: 32px;
-}
-
-.logo-text {
-  font-family: var(--font-display);
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
-  background: linear-gradient(135deg, var(--accent), #f472b6);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
 
 .sidebar-controls {
   padding: 16px 24px;
@@ -1043,6 +1029,21 @@ header.main-header {
 .toastui-editor-contents th {
   background: var(--active-bg) !important;
   font-weight: 600;
+}
+
+.sortable-header {
+  user-select: none;
+  position: relative;
+}
+
+.sortable-header:hover {
+  background: var(--accent-glow) !important;
+}
+
+.sort-indicator {
+  font-size: 11px;
+  display: inline-block;
+  vertical-align: middle;
 }
 
 /* LINK STYLING */
@@ -2458,6 +2459,9 @@ dialog.modal::backdrop {
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, top 0.15s, left 0.15s;
 }
 
 .editor-formatting-bar button {
@@ -2523,4 +2527,47 @@ dialog.modal::backdrop {
 .context-menu-item.danger:hover {
   background: #ff5555;
   color: #ffffff;
+}
+
+/* FOOTNOTE STYLING */
+.footnote-ref {
+  vertical-align: super;
+  font-size: 0.75em;
+  line-height: 0;
+  margin-left: 2px;
+  font-weight: 600;
+}
+
+.footnote-ref a {
+  text-decoration: none;
+  color: var(--accent);
+}
+
+.footnote-ref a:hover {
+  text-decoration: underline;
+}
+
+.footnote-definition {
+  margin-top: 16px;
+  padding: 10px 16px;
+  border-left: 3px solid var(--accent);
+  background: var(--active-bg);
+  border-radius: 0 6px 6px 0;
+  font-size: 0.92em;
+  color: var(--text-muted);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.footnote-definition .footnote-label {
+  font-weight: 700;
+  margin-right: 6px;
+}
+
+.footnote-definition .footnote-label a {
+  text-decoration: none;
+  color: var(--accent);
+}
+
+.footnote-definition .footnote-label a:hover {
+  text-decoration: underline;
 }
