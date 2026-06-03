@@ -188,7 +188,6 @@ class NativeNodesApp {
         if (savedHandle) {
           if (savedHandle.isTauri) {
             // Cannot auto-load Tauri workspace path in browser mode
-            console.log('Saved workspace is for Tauri mode; cannot load in browser.');
           } else {
             // Web Mode
             const permission = await savedHandle.queryPermission({ mode: 'readwrite' });
