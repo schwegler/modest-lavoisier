@@ -65,4 +65,57 @@ Actual link is [[Here]]`;
     expect(links).toEqual(['Here']);
   });
 
+
+  test('should return empty array for text without links', async ({ page }) => {
+    const links = await page.evaluate(async () => {
+      const { extractWikiLinks } = await new Function("return import('./js/editor.js')")();
+      return extractWikiLinks('Just some regular text. No brackets here.');
+    });
+    expect(links).toEqual([]);
+  });
+
+  test('should ignore empty or whitespace-only links', async ({ page }) => {
+    const links = await page.evaluate(async () => {
+      const { extractWikiLinks } = await new Function("return import('./js/editor.js')")();
+      return extractWikiLinks('Some text [[ ]] and [[ | label ]]');
+    });
+    expect(links).toEqual([]);
+  });
+
+  test('should ignore malformed links', async ({ page }) => {
+    const links = await page.evaluate(async () => {
+      const { extractWikiLinks } = await new Function("return import('./js/editor.js')")();
+      return extractWikiLinks('Some [single bracket] and [[unclosed and unopened and [ [spaced] ]');
+    });
+    expect(links).toEqual([]);
+  });
+
+  test('should extract links with special characters', async ({ page }) => {
+    const links = await page.evaluate(async () => {
+      const { extractWikiLinks } = await new Function("return import('./js/editor.js')")();
+      return extractWikiLinks('Languages like [[C++]] and [[Node.js]], paths like [[path/to/page]]');
+    });
+    expect(links).toEqual(['C++', 'Node.js', 'path/to/page']);
+  });
+
+  test('should be case-sensitive for unique links', async ({ page }) => {
+    const links = await page.evaluate(async () => {
+      const { extractWikiLinks } = await new Function("return import('./js/editor.js')")();
+      return extractWikiLinks('[[Page]] and [[page]] are different');
+    });
+    expect(links).toEqual(['Page', 'page']);
+  });
+
+  test('should extract multiple links across different lines', async ({ page }) => {
+    const links = await page.evaluate(async () => {
+      const { extractWikiLinks } = await new Function("return import('./js/editor.js')")();
+      const markdown = `# Header
+      Here is [[Link 1]].
+
+      And another [[Link 2]] here.`;
+      return extractWikiLinks(markdown);
+    });
+    expect(links).toEqual(['Link 1', 'Link 2']);
+  });
+
 });
