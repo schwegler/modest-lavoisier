@@ -69,6 +69,37 @@ export function renderMarkdown(markdown, existingPages = new Set()) {
       }
       return `<pre><code class="language-${escapeHTML(lang)}">${escapeHTML(codeText)}</code></pre>`;
     },
+    image(href, title, text) {
+      let cleanHref = href;
+      if (href.startsWith('wikilink:')) {
+        cleanHref = decodeURIComponent(href.slice(9));
+      }
+      
+      const key = cleanHref.toLowerCase();
+      let resolvedUrl = href;
+      
+      if (isMap) {
+        let foundPage = existingPages.get(key);
+        if (!foundPage) {
+          const suffix = '/' + key;
+          for (const existingKey of existingPages.keys()) {
+            if (existingKey.endsWith(suffix)) {
+              foundPage = existingPages.get(existingKey);
+              break;
+            }
+          }
+        }
+        
+        if (foundPage && foundPage.isImage && foundPage.url) {
+          resolvedUrl = foundPage.url;
+        }
+      }
+      
+      return `<div class="markdown-image-container">
+        <img src="${escapeHTML(resolvedUrl)}" alt="${escapeHTML(text || cleanHref)}" title="${escapeHTML(title || '')}">
+        ${text && text !== cleanHref ? `<span class="image-caption">${escapeHTML(text)}</span>` : ''}
+      </div>`;
+    },
     link(href, title, text) {
       if (href.startsWith('wikilink:')) {
         const pageName = decodeURIComponent(href.slice(9));
@@ -139,7 +170,10 @@ export function renderMarkdown(markdown, existingPages = new Set()) {
     breaks: true
   });
   
-  return DOMPurify.sanitize(rawHTML);
+  return DOMPurify.sanitize(rawHTML, {
+    ADD_URI_SAFE_ATTR: ['src'],
+    ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|xxx|wikilink|blob|data):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i
+  });
 }
 
 /**

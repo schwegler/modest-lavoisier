@@ -1,5 +1,5 @@
 import { EditorView, keymap, drawSelection, highlightActiveLine, Decoration, ViewPlugin } from 'https://esm.sh/@codemirror/view';
-import { EditorState, Compartment } from 'https://esm.sh/@codemirror/state';
+import { EditorState, Compartment, EditorSelection } from 'https://esm.sh/@codemirror/state';
 import { history, defaultKeymap, historyKeymap, indentWithTab } from 'https://esm.sh/@codemirror/commands';
 import { markdown } from 'https://esm.sh/@codemirror/lang-markdown';
 import { syntaxHighlighting, HighlightStyle, syntaxTree } from 'https://esm.sh/@codemirror/language';
@@ -31,7 +31,7 @@ const livePreviewPlugin = ViewPlugin.fromClass(class {
   }
 
   update(update) {
-    if (update.docChanged || update.selectionSet || update.viewportChanged) {
+    if (update.docChanged || update.selectionSet || update.viewportChanged || syntaxTree(update.state) !== syntaxTree(update.startState)) {
       this.decorations = this.buildDecorations(update.view);
     }
   }
@@ -59,7 +59,7 @@ const livePreviewPlugin = ViewPlugin.fromClass(class {
           // 1. StrongEmphasis (e.g. **bold**)
           if (type === 'StrongEmphasis') {
             if (!cursorIntersects(node.from, node.to)) {
-              let child = node.firstChild;
+              let child = node.node.firstChild;
               while (child) {
                 if (child.name === 'EmphasisMark') {
                   builder.push(hiddenMarkerDecoration.range(child.from, child.to));
@@ -72,7 +72,7 @@ const livePreviewPlugin = ViewPlugin.fromClass(class {
           // 2. Emphasis (e.g. *italic*)
           else if (type === 'Emphasis') {
             if (!cursorIntersects(node.from, node.to)) {
-              let child = node.firstChild;
+              let child = node.node.firstChild;
               while (child) {
                 if (child.name === 'EmphasisMark') {
                   builder.push(hiddenMarkerDecoration.range(child.from, child.to));
@@ -85,7 +85,7 @@ const livePreviewPlugin = ViewPlugin.fromClass(class {
           // 3. InlineCode (e.g. `code`)
           else if (type === 'InlineCode') {
             if (!cursorIntersects(node.from, node.to)) {
-              let child = node.firstChild;
+              let child = node.node.firstChild;
               while (child) {
                 if (child.name === 'CodeMark') {
                   builder.push(hiddenMarkerDecoration.range(child.from, child.to));
@@ -98,7 +98,7 @@ const livePreviewPlugin = ViewPlugin.fromClass(class {
           // 4. ATXHeading1 to ATXHeading6 (e.g. # Header)
           else if (type.startsWith('ATXHeading')) {
             if (!cursorIntersects(node.from, node.to)) {
-              let child = node.firstChild;
+              let child = node.node.firstChild;
               while (child) {
                 if (child.name === 'HeaderMark') {
                   builder.push(hiddenMarkerDecoration.range(child.from, child.to));
@@ -111,7 +111,7 @@ const livePreviewPlugin = ViewPlugin.fromClass(class {
           // 5. Standard Link (e.g. [label](url))
           else if (type === 'Link') {
             if (!cursorIntersects(node.from, node.to)) {
-              let child = node.firstChild;
+              let child = node.node.firstChild;
               while (child) {
                 if (child.name === 'LinkMark') {
                   const text = view.state.sliceDoc(child.from, child.to);
@@ -239,6 +239,40 @@ export class CodeMirrorEditor {
                 }
               }
             }
+          },
+          drop: (event, view) => {
+            // 1. First check for sidebar drags (internal page/image drag)
+            const pageName = event.dataTransfer.getData('application/x-page-name');
+            if (pageName) {
+              event.preventDefault();
+              event.stopPropagation();
+              const isImage = event.dataTransfer.getData('application/x-is-image') === 'true';
+              const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+              if (pos !== null) {
+                const insertText = isImage ? `![[${pageName}]]` : `[[${pageName}]]`;
+                view.dispatch({
+                  changes: { from: pos, insert: insertText },
+                  selection: { anchor: pos + insertText.length }
+                });
+                view.focus();
+              }
+              return true;
+            }
+
+            // 2. Then check for OS file drops (e.g. from Finder/Desktop)
+            const files = event.dataTransfer.files;
+            if (files && files.length > 0) {
+              const file = files[0];
+              const isImage = /\.(png|jpg|jpeg|gif|webp|svg|bmp)$/i.test(file.name);
+              if (isImage) {
+                event.preventDefault();
+                event.stopPropagation();
+                if (window.app) {
+                  window.app.handleExternalImageDrop(file, event, view);
+                }
+                return true;
+              }
+            }
           }
         }),
         this.themeConfig.of(this.getEditorTheme(theme))
@@ -297,13 +331,7 @@ export class CodeMirrorEditor {
         borderRadius: "4px"
       },
       ".cm-hidden-marker": {
-        display: "inline-block",
-        width: "0px",
-        height: "0px",
-        overflow: "hidden",
-        opacity: "0",
-        pointerEvents: "none",
-        whiteSpace: "pre"
+        display: "none"
       },
       ".cm-live-link": {
         color: "var(--accent)",
@@ -311,5 +339,67 @@ export class CodeMirrorEditor {
         cursor: "pointer"
       }
     });
+  }
+
+  insertFormatting(type) {
+    const view = this.view;
+    
+    view.dispatch(view.state.changeByRange(range => {
+      const selectedText = view.state.sliceDoc(range.from, range.to);
+      let insertText = '';
+      let selectFrom = range.from;
+      let selectTo = range.to;
+
+      switch (type) {
+        case 'bold':
+          insertText = `**${selectedText || 'bold text'}**`;
+          selectFrom += 2;
+          selectTo = selectFrom + (selectedText || 'bold text').length;
+          break;
+        case 'italic':
+          insertText = `*${selectedText || 'italic text'}*`;
+          selectFrom += 1;
+          selectTo = selectFrom + (selectedText || 'italic text').length;
+          break;
+        case 'code':
+          insertText = `\`${selectedText || 'code'}\``;
+          selectFrom += 1;
+          selectTo = selectFrom + (selectedText || 'code').length;
+          break;
+        case 'heading':
+          const line = view.state.doc.lineAt(range.from);
+          const isAtStart = range.from === line.from;
+          insertText = isAtStart ? `### ${selectedText}` : `\n### ${selectedText}`;
+          selectFrom += isAtStart ? 4 : 5;
+          selectTo = selectFrom + selectedText.length;
+          break;
+        case 'link':
+          insertText = `[[${selectedText || 'Link Target'}]]`;
+          selectFrom += 2;
+          selectTo = selectFrom + (selectedText || 'Link Target').length;
+          break;
+        default:
+          return { range };
+      }
+
+      return {
+        changes: { from: range.from, to: range.to, insert: insertText },
+        range: EditorSelection.range(selectFrom, selectTo)
+      };
+    }));
+    view.focus();
+  }
+
+  insertText(text) {
+    const view = this.view;
+    const ranges = view.state.selection.ranges;
+    if (ranges.length === 0) return;
+    
+    const range = ranges[0];
+    view.dispatch({
+      changes: { from: range.from, to: range.to, insert: text },
+      selection: { anchor: range.from + text.length }
+    });
+    view.focus();
   }
 }

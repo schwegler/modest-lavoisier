@@ -13,6 +13,7 @@ import { WikiGraph } from './graph.js';
 
 class NativeNodesApp {
   constructor() {
+    window.app = this;
     // App State
     this.dirHandle = null;
     this.pages = new Map(); // Lowercase Page Name -> { name, content, handle, exists }
@@ -105,7 +106,10 @@ class NativeNodesApp {
       propertiesHeader: document.getElementById('propertiesHeader'),
       propertiesList: document.getElementById('propertiesList'),
       addPropertyBtn: document.getElementById('addPropertyBtn'),
-      activeNoteTitleInput: document.getElementById('activeNoteTitleInput')
+      activeNoteTitleInput: document.getElementById('activeNoteTitleInput'),
+      editorFormattingBar: document.getElementById('editorFormattingBar'),
+      imageFileInput: document.getElementById('imageFileInput'),
+      customContextMenu: document.getElementById('customContextMenu')
     };
 
 
@@ -487,7 +491,31 @@ class NativeNodesApp {
           this.dom.graphSettingsDrawer.style.display = 'none';
         }
       }
+      if (this.dom.customContextMenu) {
+        this.dom.customContextMenu.style.display = 'none';
+      }
     });
+
+    document.addEventListener('contextmenu', (e) => {
+      if (this.dom.customContextMenu && !e.target.closest('.folder-title') && !e.target.closest('.file-item') && !e.target.closest('.folder-item')) {
+        this.dom.customContextMenu.style.display = 'none';
+      }
+    });
+
+    // Root folder drop target
+    this.dom.fileList.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+    });
+    this.dom.fileList.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      const pageName = e.dataTransfer.getData('application/x-page-name');
+      if (pageName) {
+        await this.movePageToFolder(pageName, '');
+      }
+    });
+
+    this.setupFormattingToolbar();
 
     this.dom.graphRepulsionSlider.addEventListener('input', () => {
       const val = this.dom.graphRepulsionSlider.value;
@@ -601,7 +629,7 @@ class NativeNodesApp {
     // Export Page Control
     this.dom.exportHtmlBtn.addEventListener('click', async () => {
       // Ensure preview content is up-to-date before printing
-      this.renderPreview();
+      await this.renderPreview();
       
       // Small delay to let the DOM update before triggering print
       await new Promise(r => setTimeout(r, 100));
@@ -852,6 +880,32 @@ class NativeNodesApp {
       this.pageNamesIndex.get(flatName).push(pageObj);
     }
 
+    // Populate mock images in Sandbox mode
+    const sandboxImages = [
+      { name: '3082743_0818bc.jpg', url: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800' },
+      { name: 'Guides/sunset.png', url: 'https://images.unsplash.com/photo-1472214222555-d404758b1c42?w=800' }
+    ];
+    for (const img of sandboxImages) {
+      const key = img.name.toLowerCase();
+      const pageObj = {
+        name: img.name,
+        content: '',
+        exists: true,
+        isImage: true,
+        handle: null,
+        url: img.url,
+        tags: [],
+        fields: {}
+      };
+      this.pages.set(key, pageObj);
+      const parts = key.split('/');
+      const flatName = parts[parts.length - 1];
+      if (!this.pageNamesIndex.has(flatName)) {
+        this.pageNamesIndex.set(flatName, []);
+      }
+      this.pageNamesIndex.get(flatName).push(pageObj);
+    }
+
     this.showAppShell();
   }
 
@@ -886,8 +940,12 @@ class NativeNodesApp {
     for await (const entry of dirHandle.values()) {
       const relativePath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
       
-      if (entry.kind === 'file' && entry.name.toLowerCase().endsWith('.md')) {
-        entries.push({ entry, relativePath });
+      const isFile = entry.kind === 'file';
+      const isMarkdown = entry.name.toLowerCase().endsWith('.md');
+      const isImage = /\.(png|jpg|jpeg|gif|webp|svg|bmp)$/i.test(entry.name);
+      
+      if (isFile && (isMarkdown || isImage)) {
+        entries.push({ entry, relativePath, isImage });
       } else if (entry.kind === 'directory') {
         if (entry.name.startsWith('.')) continue; // skip hidden/system directories
         await this.scanDirectory(entry, relativePath, entries);
@@ -896,21 +954,37 @@ class NativeNodesApp {
 
     if (isRoot && entries.length > 0) {
       const promises = [];
-      for (const { entry, relativePath } of entries) {
+      for (const { entry, relativePath, isImage } of entries) {
         promises.push((async () => {
           const file = await entry.getFile();
-          const content = await file.text();
-          const pageName = relativePath.slice(0, -3); // Strip .md
-
-          const fm = parseFrontmatter(content);
-          const pageObj = {
-            name: pageName,
-            content: content,
-            exists: true,
-            handle: entry,
-            tags: fm.tags,
-            fields: fm.fields
-          };
+          const pageName = isImage ? relativePath : relativePath.slice(0, -3);
+          
+          let pageObj;
+          if (isImage) {
+            pageObj = {
+              name: pageName,
+              content: '',
+              exists: true,
+              isImage: true,
+              handle: entry,
+              url: URL.createObjectURL(file),
+              tags: [],
+              fields: {}
+            };
+          } else {
+            const content = await file.text();
+            const fm = parseFrontmatter(content);
+            pageObj = {
+              name: pageName,
+              content: content,
+              exists: true,
+              isImage: false,
+              handle: entry,
+              tags: fm.tags,
+              fields: fm.fields
+            };
+          }
+          
           this.pages.set(pageName.toLowerCase(), pageObj);
 
           const parts = pageName.toLowerCase().split('/');
@@ -957,21 +1031,40 @@ class NativeNodesApp {
 
       if (entry.isDirectory) {
         promises.push(this._scanDirectoryTauri(basePath, relativePath));
-      } else if (entry.isFile && entry.name.toLowerCase().endsWith('.md')) {
+      } else if (entry.isFile && (entry.name.toLowerCase().endsWith('.md') || /\.(png|jpg|jpeg|gif|webp|svg|bmp)$/i.test(entry.name))) {
         promises.push((async () => {
           try {
-            const content = await fs.readTextFile(`${basePath}/${relativePath}`);
-            const pageName = relativePath.slice(0, -3); // Strip .md
-
-            const fm = parseFrontmatter(content);
-            const pageObj = {
-              name: pageName,
-              content: content,
-              exists: true,
-              handle: `${basePath}/${relativePath}`, // Store full path string
-              tags: fm.tags,
-              fields: fm.fields
-            };
+            const isImage = /\.(png|jpg|jpeg|gif|webp|svg|bmp)$/i.test(entry.name);
+            const pageName = isImage ? relativePath : relativePath.slice(0, -3);
+            const fileFullPath = `${basePath}/${relativePath}`;
+            
+            let pageObj;
+            if (isImage) {
+              const assetUrl = window.__TAURI__.core.convertFileSrc(fileFullPath);
+              pageObj = {
+                name: pageName,
+                content: '',
+                exists: true,
+                isImage: true,
+                handle: fileFullPath,
+                url: assetUrl,
+                tags: [],
+                fields: {}
+              };
+            } else {
+              const content = await fs.readTextFile(fileFullPath);
+              const fm = parseFrontmatter(content);
+              pageObj = {
+                name: pageName,
+                content: content,
+                exists: true,
+                isImage: false,
+                handle: fileFullPath,
+                tags: fm.tags,
+                fields: fm.fields
+              };
+            }
+            
             this.pages.set(pageName.toLowerCase(), pageObj);
 
             const parts = pageName.toLowerCase().split('/');
@@ -1060,18 +1153,41 @@ class NativeNodesApp {
       const isActive = this.activePage && page.name.toLowerCase() === this.activePage.name.toLowerCase();
       li.className = `file-item ${isActive ? 'active' : ''}`;
 
+      const iconHTML = page.isImage 
+        ? `<svg class="file-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+             <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+             <circle cx="8.5" cy="8.5" r="1.5"></circle>
+             <polyline points="21 15 16 10 5 21"></polyline>
+           </svg>`
+        : `<svg class="file-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+             <polyline points="14 2 14 8 20 8"></polyline>
+             <line x1="16" y1="13" x2="8" y2="13"></line>
+             <line x1="16" y1="17" x2="8" y2="17"></line>
+           </svg>`;
+
       li.innerHTML = `
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-          <polyline points="14 2 14 8 20 8"></polyline>
-          <line x1="16" y1="13" x2="8" y2="13"></line>
-          <line x1="16" y1="17" x2="8" y2="17"></line>
-        </svg>
+        ${iconHTML}
         <span>${escapeHTML(page.name)}</span>
       `;
 
       li.addEventListener('click', () => {
         window.location.hash = `#/page/${encodeURIComponent(page.name)}`;
+      });
+
+      li.draggable = true;
+      li.addEventListener('dragstart', (e) => {
+        e.stopPropagation();
+        e.dataTransfer.effectAllowed = 'all';
+        e.dataTransfer.setData('text/plain', page.name);
+        e.dataTransfer.setData('application/x-page-name', page.name);
+        e.dataTransfer.setData('application/x-is-image', page.isImage ? 'true' : 'false');
+      });
+
+      li.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.showContextMenu(e, 'file', page);
       });
 
       this.dom.fileList.appendChild(li);
@@ -1153,6 +1269,31 @@ class NativeNodesApp {
         setSetting('expandedFolders', Array.from(this.expandedFolders));
       });
 
+      titleDiv.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = 'move';
+        titleDiv.classList.add('drag-over');
+      });
+      titleDiv.addEventListener('dragleave', () => {
+        titleDiv.classList.remove('drag-over');
+      });
+      titleDiv.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        titleDiv.classList.remove('drag-over');
+        const pageName = e.dataTransfer.getData('application/x-page-name');
+        if (pageName) {
+          await this.movePageToFolder(pageName, fullDirPath);
+        }
+      });
+
+      titleDiv.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.showContextMenu(e, 'folder', fullDirPath);
+      });
+
       this._renderDirectoryNode(dir, childrenUl, fullDirPath);
       container.appendChild(folderLi);
     }
@@ -1164,19 +1305,42 @@ class NativeNodesApp {
 
       const displayTitle = file.name.split('/').pop();
 
+      const iconHTML = file.isImage 
+        ? `<svg class="file-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+             <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+             <circle cx="8.5" cy="8.5" r="1.5"></circle>
+             <polyline points="21 15 16 10 5 21"></polyline>
+           </svg>`
+        : `<svg class="file-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+             <polyline points="14 2 14 8 20 8"></polyline>
+             <line x1="16" y1="13" x2="8" y2="13"></line>
+             <line x1="16" y1="17" x2="8" y2="17"></line>
+           </svg>`;
+
       fileLi.innerHTML = `
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-          <polyline points="14 2 14 8 20 8"></polyline>
-          <line x1="16" y1="13" x2="8" y2="13"></line>
-          <line x1="16" y1="17" x2="8" y2="17"></line>
-        </svg>
+        ${iconHTML}
         <span>${escapeHTML(displayTitle)}</span>
       `;
 
       fileLi.addEventListener('click', (e) => {
         e.stopPropagation();
         window.location.hash = `#/page/${encodeURIComponent(file.name)}`;
+      });
+
+      fileLi.draggable = true;
+      fileLi.addEventListener('dragstart', (e) => {
+        e.stopPropagation();
+        e.dataTransfer.effectAllowed = 'all';
+        e.dataTransfer.setData('text/plain', file.name);
+        e.dataTransfer.setData('application/x-page-name', file.name);
+        e.dataTransfer.setData('application/x-is-image', file.isImage ? 'true' : 'false');
+      });
+
+      fileLi.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.showContextMenu(e, 'file', file);
       });
 
       container.appendChild(fileLi);
@@ -1196,18 +1360,23 @@ class NativeNodesApp {
     this.activePage = page;
     setSetting('lastOpenedPage', page.name);
 
-    // Load editor text (hide frontmatter block in editor)
-    this.editor.setMarkdown(stripFrontmatter(page.content));
-    this.dom.activeNoteTitle.textContent = page.name;
-
-    // Render properties metadata block
-    this.renderProperties();
-
-    // Mark as clean initially
-    this.markAsClean();
-
-    // Render Preview HTML
-    this.renderPreview();
+    if (page.isImage) {
+      await this.ensureBlobUrlForPage(page);
+      this.setLayout('preview');
+      this.dom.activeNoteTitle.textContent = page.name;
+      this.editor.setMarkdown(`# Image Asset: ${page.name}\n\nThis is a binary image asset and cannot be edited directly.`);
+      this.markAsClean();
+      await this.renderPreview();
+    } else {
+      // Restore user's preferred layout for markdown pages
+      const preferredLayout = await getSetting('layout') || 'edit';
+      this.setLayout(preferredLayout);
+      this.dom.activeNoteTitle.textContent = page.name;
+      this.editor.setMarkdown(stripFrontmatter(page.content));
+      this.renderProperties();
+      this.markAsClean();
+      await this.renderPreview();
+    }
     
     // Highlight Active Sidebar Item
     this.renderFileList();
@@ -1223,12 +1392,97 @@ class NativeNodesApp {
     }
   }
 
+  async ensureBlobUrlForPage(page) {
+    if (!page || !page.isImage) return;
+    if (page.url && page.url.startsWith('blob:')) {
+      return;
+    }
+    
+    if (this.isTauri) {
+      try {
+        const fs = window.__TAURI__.fs;
+        const bytes = await fs.readFile(page.handle);
+        const ext = page.name.split('.').pop().toLowerCase();
+        let mimeType = 'image/jpeg';
+        if (ext === 'png') mimeType = 'image/png';
+        else if (ext === 'gif') mimeType = 'image/gif';
+        else if (ext === 'webp') mimeType = 'image/webp';
+        else if (ext === 'svg') mimeType = 'image/svg+xml';
+        else if (ext === 'bmp') mimeType = 'image/bmp';
+        
+        const blob = new Blob([bytes], { type: mimeType });
+        const blobUrl = URL.createObjectURL(blob);
+        page.url = blobUrl;
+      } catch (err) {
+        console.error('Failed to load local image binary for blob:', page.handle, err);
+      }
+    } else {
+      if (page.handle && typeof page.handle.getFile === 'function') {
+        try {
+          const file = await page.handle.getFile();
+          page.url = URL.createObjectURL(file);
+        } catch (err) {
+          console.error('Failed to load browser image file for blob:', page.name, err);
+        }
+      }
+    }
+  }
+
+  async loadEmbeddedImages(markdownText) {
+    if (!markdownText) return;
+    
+    const imagesToLoad = [];
+    
+    // 1. Match ![[image.png]]
+    const wikiImageRegex = /!\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
+    let match;
+    while ((match = wikiImageRegex.exec(markdownText)) !== null) {
+      imagesToLoad.push(match[1].trim());
+    }
+    
+    // 2. Match ![alt](url)
+    const mdImageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
+    while ((match = mdImageRegex.exec(markdownText)) !== null) {
+      const href = match[2].trim();
+      if (!href.startsWith('http://') && !href.startsWith('https://') && !href.startsWith('data:')) {
+        imagesToLoad.push(href);
+      }
+    }
+    
+    for (const imgPath of imagesToLoad) {
+      const resolvedName = this.resolveWikiLink(imgPath);
+      const foundPage = this.pages.get(resolvedName.toLowerCase());
+      if (foundPage && foundPage.isImage) {
+        await this.ensureBlobUrlForPage(foundPage);
+      }
+    }
+  }
+
   /**
    * Refreshes preview parser.
    */
-  renderPreview() {
+  async renderPreview() {
     if (!this.activePage) return;
+    
+    if (this.activePage.isImage) {
+      await this.ensureBlobUrlForPage(this.activePage);
+      const titleHTML = `<h1 class="image-preview-title">${escapeHTML(this.activePage.name)}</h1>`;
+      const imgHTML = `
+        <div class="image-preview-wrapper">
+          <img src="${escapeHTML(this.activePage.url)}" alt="${escapeHTML(this.activePage.name)}" class="image-preview-element">
+          <div class="image-preview-details">
+            <span><strong>File Path:</strong> ${escapeHTML(this.activePage.name)}</span>
+            <span><strong>Type:</strong> Image Asset</span>
+          </div>
+        </div>
+      `;
+      this.dom.previewContent.innerHTML = titleHTML + imgHTML;
+      this.renderBacklinks();
+      return;
+    }
+
     const text = this.editor.getMarkdown();
+    await this.loadEmbeddedImages(text);
     const html = renderMarkdown(text, this.pages);
     
     // Render properties block for preview if any exist
@@ -2188,6 +2442,581 @@ class NativeNodesApp {
       alert('Failed to rename page file.');
       console.error(err);
       this.dom.activeNoteTitle.textContent = oldName;
+    }
+  }
+
+  _updatePageNamesIndex(oldName, newName, pageObj) {
+    const oldParts = oldName.toLowerCase().split('/');
+    const oldFlat = oldParts[oldParts.length - 1];
+    if (this.pageNamesIndex.has(oldFlat)) {
+      const arr = this.pageNamesIndex.get(oldFlat);
+      const idx = arr.findIndex(p => p.name.toLowerCase() === oldName.toLowerCase());
+      if (idx !== -1) arr.splice(idx, 1);
+      if (arr.length === 0) this.pageNamesIndex.delete(oldFlat);
+    }
+    
+    const newParts = newName.toLowerCase().split('/');
+    const newFlat = newParts[newParts.length - 1];
+    if (!this.pageNamesIndex.has(newFlat)) {
+      this.pageNamesIndex.set(newFlat, []);
+    }
+    this.pageNamesIndex.get(newFlat).push(pageObj);
+  }
+
+  setupFormattingToolbar() {
+    const boldBtn = document.getElementById('formatBoldBtn');
+    const italicBtn = document.getElementById('formatItalicBtn');
+    const codeBtn = document.getElementById('formatCodeBtn');
+    const headingBtn = document.getElementById('formatHeadingBtn');
+    const linkBtn = document.getElementById('formatLinkBtn');
+    const imageBtn = document.getElementById('formatImageBtn');
+    const fileInput = document.getElementById('imageFileInput');
+
+    if (boldBtn) boldBtn.addEventListener('click', () => this.editor && this.editor.insertFormatting('bold'));
+    if (italicBtn) italicBtn.addEventListener('click', () => this.editor && this.editor.insertFormatting('italic'));
+    if (codeBtn) codeBtn.addEventListener('click', () => this.editor && this.editor.insertFormatting('code'));
+    if (headingBtn) headingBtn.addEventListener('click', () => this.editor && this.editor.insertFormatting('heading'));
+    if (linkBtn) linkBtn.addEventListener('click', () => this.editor && this.editor.insertFormatting('link'));
+    
+    if (imageBtn) {
+      imageBtn.addEventListener('click', () => {
+        if (!this.activePage) return;
+        if (this.isTauri) {
+          this.selectAndImportTauriImage();
+        } else {
+          if (fileInput) fileInput.click();
+        }
+      });
+    }
+
+    if (fileInput) {
+      fileInput.addEventListener('change', async () => {
+        if (fileInput.files && fileInput.files.length > 0) {
+          const file = fileInput.files[0];
+          await this.importAndInsertImageFile(file);
+          fileInput.value = ''; // clear
+        }
+      });
+    }
+  }
+
+  async selectAndImportTauriImage() {
+    try {
+      const selected = await window.__TAURI__.dialog.open({
+        filters: [{
+          name: 'Images',
+          extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp']
+        }]
+      });
+      if (selected) {
+        const selectedPath = typeof selected === 'string' ? selected : selected[0];
+        if (selectedPath) {
+          await this.importTauriImage(selectedPath);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to open Tauri file dialog for image:', err);
+    }
+  }
+
+  async importTauriImage(selectedPath) {
+    if (!this.activePage) return;
+    try {
+      const fs = window.__TAURI__.fs;
+      const fileName = selectedPath.split(/[/\\]/).pop();
+      const workspacePath = this.dirHandle.path;
+      
+      const isOutside = !selectedPath.toLowerCase().startsWith(workspacePath.toLowerCase());
+      let finalPageName;
+      let finalPath;
+
+      if (isOutside) {
+        const attachmentsFolder = `${workspacePath}/Attachments`;
+        await fs.mkdir(attachmentsFolder, { recursive: true });
+        
+        finalPath = `${attachmentsFolder}/${fileName}`;
+        const bytes = await fs.readFile(selectedPath);
+        await fs.writeFile(finalPath, bytes);
+        finalPageName = `Attachments/${fileName}`;
+      } else {
+        const relative = selectedPath.slice(workspacePath.length + 1);
+        finalPageName = relative.replace(/\\/g, '/');
+        finalPath = selectedPath;
+      }
+
+      const key = finalPageName.toLowerCase();
+      let pageObj = this.pages.get(key);
+      if (!pageObj) {
+        pageObj = {
+          name: finalPageName,
+          content: '',
+          exists: true,
+          isImage: true,
+          handle: finalPath,
+          url: window.__TAURI__.core.convertFileSrc(finalPath),
+          tags: [],
+          fields: {}
+        };
+        this.pages.set(key, pageObj);
+        
+        const flatName = fileName.toLowerCase();
+        if (!this.pageNamesIndex.has(flatName)) {
+          this.pageNamesIndex.set(flatName, []);
+        }
+        this.pageNamesIndex.get(flatName).push(pageObj);
+        
+        this.renderFileList();
+      }
+
+      await this.ensureBlobUrlForPage(pageObj);
+      this.editor.insertText(`![[${finalPageName}]]`);
+    } catch (err) {
+      console.error('Failed to import Tauri image:', err);
+      alert('Failed to import image: ' + err.message);
+    }
+  }
+
+  async importAndInsertImageFile(file) {
+    if (!this.activePage) return;
+    try {
+      const attachmentsDir = await this.dirHandle.getDirectoryHandle('Attachments', { create: true });
+      const fileHandle = await attachmentsDir.getFileHandle(file.name, { create: true });
+      
+      const writable = await fileHandle.createWritable();
+      await writable.write(file);
+      await writable.close();
+
+      const pageName = `Attachments/${file.name}`;
+      const key = pageName.toLowerCase();
+      
+      let pageObj = this.pages.get(key);
+      if (!pageObj) {
+        pageObj = {
+          name: pageName,
+          content: '',
+          exists: true,
+          isImage: true,
+          handle: fileHandle,
+          url: URL.createObjectURL(file),
+          tags: [],
+          fields: {}
+        };
+        this.pages.set(key, pageObj);
+
+        const flatName = file.name.toLowerCase();
+        if (!this.pageNamesIndex.has(flatName)) {
+          this.pageNamesIndex.set(flatName, []);
+        }
+        this.pageNamesIndex.get(flatName).push(pageObj);
+
+        this.renderFileList();
+      }
+
+      this.editor.insertText(`![[${pageName}]]`);
+    } catch (err) {
+      console.error('Failed to import image in browser:', err);
+      alert('Failed to import image: ' + err.message);
+    }
+  }
+
+  async handleExternalImageDrop(file, dropEvent, cmView) {
+    if (!this.activePage) return;
+    try {
+      const pos = cmView.posAtCoords({ x: dropEvent.clientX, y: dropEvent.clientY });
+      if (pos === null) return;
+
+      if (this.isTauri && file.path) {
+        const fs = window.__TAURI__.fs;
+        const fileName = file.name;
+        const workspacePath = this.dirHandle.path;
+        
+        const isOutside = !file.path.toLowerCase().startsWith(workspacePath.toLowerCase());
+        let finalPageName;
+        let finalPath;
+
+        if (isOutside) {
+          const attachmentsFolder = `${workspacePath}/Attachments`;
+          await fs.mkdir(attachmentsFolder, { recursive: true });
+          
+          finalPath = `${attachmentsFolder}/${fileName}`;
+          const bytes = await fs.readFile(file.path);
+          await fs.writeFile(finalPath, bytes);
+          finalPageName = `Attachments/${fileName}`;
+        } else {
+          const relative = file.path.slice(workspacePath.length + 1);
+          finalPageName = relative.replace(/\\/g, '/');
+          finalPath = file.path;
+        }
+
+        const key = finalPageName.toLowerCase();
+        let pageObj = this.pages.get(key);
+        if (!pageObj) {
+          pageObj = {
+            name: finalPageName,
+            content: '',
+            exists: true,
+            isImage: true,
+            handle: finalPath,
+            url: window.__TAURI__.core.convertFileSrc(finalPath),
+            tags: [],
+            fields: {}
+          };
+          this.pages.set(key, pageObj);
+          
+          const flatName = fileName.toLowerCase();
+          if (!this.pageNamesIndex.has(flatName)) {
+            this.pageNamesIndex.set(flatName, []);
+          }
+          this.pageNamesIndex.get(flatName).push(pageObj);
+          
+          this.renderFileList();
+        }
+
+        await this.ensureBlobUrlForPage(pageObj);
+
+        const insertText = `![[${finalPageName}]]`;
+        cmView.dispatch({
+          changes: { from: pos, insert: insertText },
+          selection: { anchor: pos + insertText.length }
+        });
+        cmView.focus();
+      } else {
+        const attachmentsDir = await this.dirHandle.getDirectoryHandle('Attachments', { create: true });
+        const fileHandle = await attachmentsDir.getFileHandle(file.name, { create: true });
+        
+        const writable = await fileHandle.createWritable();
+        await writable.write(file);
+        await writable.close();
+
+        const pageName = `Attachments/${file.name}`;
+        const key = pageName.toLowerCase();
+        
+        let pageObj = this.pages.get(key);
+        if (!pageObj) {
+          pageObj = {
+            name: pageName,
+            content: '',
+            exists: true,
+            isImage: true,
+            handle: fileHandle,
+            url: URL.createObjectURL(file),
+            tags: [],
+            fields: {}
+          };
+          this.pages.set(key, pageObj);
+
+          const flatName = file.name.toLowerCase();
+          if (!this.pageNamesIndex.has(flatName)) {
+            this.pageNamesIndex.set(flatName, []);
+          }
+          this.pageNamesIndex.get(flatName).push(pageObj);
+
+          this.renderFileList();
+        }
+
+        const insertText = `![[${pageName}]]`;
+        cmView.dispatch({
+          changes: { from: pos, insert: insertText },
+          selection: { anchor: pos + insertText.length }
+        });
+        cmView.focus();
+      }
+    } catch (err) {
+      console.error('Failed to handle external image drop:', err);
+    }
+  }
+
+  async movePageToFolder(pageName, targetFolder) {
+    const key = pageName.toLowerCase();
+    const page = this.pages.get(key);
+    if (!page) return;
+
+    const displayTitle = pageName.split('/').pop();
+    const newName = targetFolder ? `${targetFolder}/${displayTitle}` : displayTitle;
+    if (newName.toLowerCase() === pageName.toLowerCase()) return;
+
+    const newKey = newName.toLowerCase();
+    if (this.pages.has(newKey)) {
+      alert(`A file named "${newName}" already exists in the destination folder.`);
+      return;
+    }
+
+    try {
+      if (this.isSandbox) {
+        this.pages.delete(key);
+        page.name = newName;
+        this.pages.set(newKey, page);
+        this._updatePageNamesIndex(pageName, newName, page);
+      } else if (this.isTauri) {
+        const fs = window.__TAURI__.fs;
+        const isMarkdown = !page.isImage;
+        const srcPath = page.handle;
+        const destFolderParts = targetFolder.split('/').filter(Boolean);
+        
+        if (destFolderParts.length > 0) {
+          const folderFullPath = `${this.dirHandle.path}/${destFolderParts.join('/')}`;
+          await fs.mkdir(folderFullPath, { recursive: true });
+        }
+        
+        const destPath = isMarkdown 
+          ? `${this.dirHandle.path}/${newName}.md` 
+          : `${this.dirHandle.path}/${newName}`;
+          
+        await fs.rename(srcPath, destPath);
+        
+        this.pages.delete(key);
+        page.name = newName;
+        page.handle = destPath;
+        this.pages.set(newKey, page);
+        this._updatePageNamesIndex(pageName, newName, page);
+      } else {
+        const isMarkdown = !page.isImage;
+        const file = page.isImage ? await page.handle.getFile() : null;
+        const content = page.isImage ? null : page.content;
+        
+        const destFolderParts = targetFolder.split('/').filter(Boolean);
+        let currentDir = this.dirHandle;
+        for (const folderName of destFolderParts) {
+          currentDir = await currentDir.getDirectoryHandle(folderName, { create: true });
+        }
+        
+        const destFileName = isMarkdown ? displayTitle + '.md' : displayTitle;
+        const newFileHandle = await currentDir.getFileHandle(destFileName, { create: true });
+        const writable = await newFileHandle.createWritable();
+        if (isMarkdown) {
+          await writable.write(content);
+        } else {
+          await writable.write(file);
+        }
+        await writable.close();
+        
+        const srcFolderParts = pageName.split('/').slice(0, -1);
+        let srcDir = this.dirHandle;
+        for (const folderName of srcFolderParts) {
+          srcDir = await srcDir.getDirectoryHandle(folderName);
+        }
+        const srcFileName = isMarkdown ? displayTitle + '.md' : displayTitle;
+        await srcDir.removeEntry(srcFileName);
+        
+        this.pages.delete(key);
+        page.name = newName;
+        page.handle = newFileHandle;
+        this.pages.set(newKey, page);
+        this._updatePageNamesIndex(pageName, newName, page);
+      }
+
+      if (this.activePage && this.activePage.name.toLowerCase() === pageName.toLowerCase()) {
+        this.activePage = page;
+        window.location.hash = `#/page/${encodeURIComponent(newName)}`;
+      } else {
+        this.renderFileList();
+        this.updateGraph();
+      }
+    } catch (err) {
+      console.error('Failed to move file to folder:', err);
+      alert('Failed to move file: ' + err.message);
+    }
+  }
+
+  async deletePage(page) {
+    if (!page) return;
+    const confirmDelete = confirm(`Are you sure you want to delete the file "${page.name}"? This action cannot be undone.`);
+    if (!confirmDelete) return;
+
+    try {
+      if (this.isSandbox) {
+        this.pages.delete(page.name.toLowerCase());
+        this._removePageFromIndex(page.name);
+      } else if (this.isTauri) {
+        const fs = window.__TAURI__.fs;
+        await fs.remove(page.handle);
+        this.pages.delete(page.name.toLowerCase());
+        this._removePageFromIndex(page.name);
+      } else {
+        const parts = page.name.split('/');
+        let currentDir = this.dirHandle;
+        for (let i = 0; i < parts.length - 1; i++) {
+          currentDir = await currentDir.getDirectoryHandle(parts[i]);
+        }
+        const fileName = page.isImage ? parts[parts.length - 1] : parts[parts.length - 1] + '.md';
+        await currentDir.removeEntry(fileName);
+        this.pages.delete(page.name.toLowerCase());
+        this._removePageFromIndex(page.name);
+      }
+
+      if (this.activePage && this.activePage.name.toLowerCase() === page.name.toLowerCase()) {
+        this.activePage = null;
+        const remaining = Array.from(this.pages.keys());
+        if (remaining.length > 0) {
+          await this.loadPage(this.pages.get(remaining[0]).name);
+        } else {
+          this.editor.setMarkdown('');
+          this.dom.previewContent.innerHTML = '';
+          this.dom.activeNoteTitle.textContent = 'No page open';
+        }
+      } else {
+        this.renderFileList();
+        this.renderTagList();
+        this.updateGraph();
+      }
+    } catch (err) {
+      console.error('Failed to delete file:', page.name, err);
+      alert('Failed to delete file: ' + err.message);
+    }
+  }
+
+  async deleteFolder(folderPath) {
+    const confirmDelete = confirm(`Are you sure you want to delete the folder "${folderPath}" and all of its contents? This action cannot be undone.`);
+    if (!confirmDelete) return;
+
+    try {
+      const folderKey = folderPath.toLowerCase() + '/';
+      const pagesToDelete = [];
+      for (const [key, page] of this.pages.entries()) {
+        if (key === folderPath.toLowerCase() || key.startsWith(folderKey)) {
+          pagesToDelete.push(page);
+        }
+      }
+
+      if (this.isSandbox) {
+        for (const page of pagesToDelete) {
+          this.pages.delete(page.name.toLowerCase());
+          this._removePageFromIndex(page.name);
+        }
+      } else if (this.isTauri) {
+        const fs = window.__TAURI__.fs;
+        const fullPath = `${this.dirHandle.path}/${folderPath}`;
+        await fs.remove(fullPath, { recursive: true });
+        for (const page of pagesToDelete) {
+          this.pages.delete(page.name.toLowerCase());
+          this._removePageFromIndex(page.name);
+        }
+      } else {
+        const parts = folderPath.split('/');
+        let currentDir = this.dirHandle;
+        for (let i = 0; i < parts.length - 1; i++) {
+          currentDir = await currentDir.getDirectoryHandle(parts[i]);
+        }
+        await currentDir.removeEntry(parts[parts.length - 1], { recursive: true });
+        for (const page of pagesToDelete) {
+          this.pages.delete(page.name.toLowerCase());
+          this._removePageFromIndex(page.name);
+        }
+      }
+
+      if (this.activePage && (this.activePage.name.toLowerCase() === folderPath.toLowerCase() || this.activePage.name.toLowerCase().startsWith(folderKey))) {
+        this.activePage = null;
+        const remaining = Array.from(this.pages.keys());
+        if (remaining.length > 0) {
+          await this.loadPage(this.pages.get(remaining[0]).name);
+        } else {
+          this.editor.setMarkdown('');
+          this.dom.previewContent.innerHTML = '';
+          this.dom.activeNoteTitle.textContent = 'No page open';
+        }
+      } else {
+        this.renderFileList();
+        this.renderTagList();
+        this.updateGraph();
+      }
+    } catch (err) {
+      console.error('Failed to delete folder:', folderPath, err);
+      alert('Failed to delete folder: ' + err.message);
+    }
+  }
+
+  showContextMenu(e, type, data) {
+    const menu = this.dom.customContextMenu;
+    if (!menu) return;
+
+    menu.innerHTML = '';
+    
+    if (type === 'folder') {
+      const folderPath = data;
+      const newNoteItem = document.createElement('div');
+      newNoteItem.className = 'context-menu-item';
+      newNoteItem.innerHTML = `
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 4px;">
+          <line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        New Note
+      `;
+      newNoteItem.addEventListener('click', () => {
+        menu.style.display = 'none';
+        this.promptNewNoteInFolder(folderPath);
+      });
+
+      const deleteFolderItem = document.createElement('div');
+      deleteFolderItem.className = 'context-menu-item danger';
+      deleteFolderItem.innerHTML = `
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+          <polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        </svg>
+        Delete Folder
+      `;
+      deleteFolderItem.addEventListener('click', () => {
+        menu.style.display = 'none';
+        this.deleteFolder(folderPath);
+      });
+
+      menu.appendChild(newNoteItem);
+      menu.appendChild(deleteFolderItem);
+    } else if (type === 'file') {
+      const pageObj = data;
+      const deleteFileItem = document.createElement('div');
+      deleteFileItem.className = 'context-menu-item danger';
+      deleteFileItem.innerHTML = `
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+          <polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        </svg>
+        Delete Note
+      `;
+      deleteFileItem.addEventListener('click', () => {
+        menu.style.display = 'none';
+        this.deletePage(pageObj);
+      });
+
+      menu.appendChild(deleteFileItem);
+    }
+
+    menu.style.display = 'block';
+    
+    const menuWidth = menu.offsetWidth || 150;
+    const menuHeight = menu.offsetHeight || 100;
+    let x = e.pageX;
+    let y = e.pageY;
+    
+    if (x + menuWidth > window.innerWidth) {
+      x = window.innerWidth - menuWidth - 10;
+    }
+    if (y + menuHeight > window.innerHeight) {
+      y = window.innerHeight - menuHeight - 10;
+    }
+    
+    menu.style.left = `${x}px`;
+    menu.style.top = `${y}px`;
+  }
+
+  promptNewNoteInFolder(folderPath) {
+    const pageName = prompt(`Enter new note name to create in "${folderPath}":`);
+    if (pageName && pageName.trim()) {
+      const cleanName = pageName.trim();
+      this.createNewPage(`${folderPath}/${cleanName}`);
+    }
+  }
+
+  _removePageFromIndex(pageName) {
+    const parts = pageName.toLowerCase().split('/');
+    const flatName = parts[parts.length - 1];
+    if (this.pageNamesIndex.has(flatName)) {
+      const arr = this.pageNamesIndex.get(flatName);
+      const idx = arr.findIndex(p => p.name.toLowerCase() === pageName.toLowerCase());
+      if (idx !== -1) {
+        arr.splice(idx, 1);
+      }
+      if (arr.length === 0) {
+        this.pageNamesIndex.delete(flatName);
+      }
     }
   }
 

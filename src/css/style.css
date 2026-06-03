@@ -304,6 +304,7 @@ aside.sidebar {
   padding: 24px;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 12px;
   border-bottom: 1px solid var(--border);
 }
@@ -2347,5 +2348,179 @@ dialog.modal::backdrop {
   }
 }
 
+/* ==========================================================================
+   IMAGE ASSET RENDERING & PREVIEW STYLES
+   ========================================================================== */
+.markdown-image-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 24px 0;
+  max-width: 100%;
+}
 
+.markdown-image-container img {
+  max-width: 100%;
+  max-height: 500px;
+  border-radius: 12px;
+  box-shadow: var(--card-shadow);
+  border: 1px solid var(--border);
+  object-fit: contain;
+}
 
+.image-caption {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 8px;
+  font-style: italic;
+}
+
+.image-preview-title {
+  font-family: var(--font-display);
+  font-size: 24px !important;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 24px !important;
+  border-bottom: 1px solid var(--border) !important;
+  padding-bottom: 12px !important;
+}
+
+.image-preview-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 24px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--card-shadow);
+}
+
+.image-preview-element {
+  max-width: 100%;
+  max-height: 60vh;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  background: repeating-conic-gradient(rgba(0,0,0,0.05) 0% 25%, transparent 0% 50%) 50% / 20px 20px;
+}
+
+[data-theme="dark"] .image-preview-element {
+  background: repeating-conic-gradient(rgba(255,255,255,0.03) 0% 25%, transparent 0% 50%) 50% / 20px 20px;
+}
+
+.image-preview-details {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+  width: 100%;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+
+.file-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: color var(--transition-fast);
+}
+
+.file-item.active .file-icon {
+  color: var(--accent);
+}
+
+/* Drag and Drop Drag Over on Folders */
+.folder-title.drag-over {
+  background: var(--accent-glow) !important;
+  color: var(--accent) !important;
+  border-radius: 4px;
+}
+
+/* Floating Formatting Toolbar */
+.editor-formatting-bar {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  background: var(--card-bg-glass);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.editor-formatting-bar button {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.editor-formatting-bar button:hover {
+  background: var(--accent-glow);
+  color: var(--accent);
+}
+
+.editor-formatting-bar .divider {
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+  margin: 0 4px;
+}
+
+/* Custom Context Menu */
+.context-menu {
+  position: absolute;
+  z-index: 1000;
+  background: var(--card-bg-glass);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  padding: 6px 0;
+  min-width: 150px;
+}
+
+.context-menu-item {
+  padding: 8px 16px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.context-menu-item:hover {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.context-menu-item.danger {
+  color: #ff5555;
+}
+
+.context-menu-item.danger:hover {
+  background: #ff5555;
+  color: #ffffff;
+}
