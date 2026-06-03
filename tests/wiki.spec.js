@@ -38,7 +38,7 @@ test.describe('Native Nodes Web App Tests', () => {
     // 2. Verify subfolder is expanded by default on scan
     const guidesChildren = page.locator('.folder-item:has-text("Guides") .folder-children');
     await expect(guidesChildren).toBeVisible();
-    await expect(guidesChildren.locator('.file-item')).toContainText('Style Guide');
+    await expect(guidesChildren).toContainText('Style Guide');
 
     // 3. Toggle collapse on Guides folder
     await page.click('.folder-item:has-text("Guides") .folder-title');

@@ -35,10 +35,10 @@ export class WikiGraph {
     this.mouseDownPos = null;
 
     // Simulation parameters
-    this.charge = -350;       // Repulsion strength
+    this.charge = -1200;       // Repulsion strength (default wider spacing)
     this.linkStrength = 0.04;   // Hooke's Law spring strength
-    this.linkDistance = 90;    // Ideal bond distance
-    this.centerStrength = 0.02; // Attractor pull to center
+    this.linkDistance = 100;    // Ideal bond distance (slightly wider)
+    this.centerStrength = 0.003; // Attractor pull to center (gentler gravity)
     this.damping = 0.82;        // Friction coefficient
 
     // Stabilization & features
@@ -326,7 +326,7 @@ export class WikiGraph {
         const distSq = dx * dx + dy * dy + 0.1;
         const dist = Math.sqrt(distSq);
 
-        if (dist < 320) {
+        if (dist < 600) {
           // Repulsion force with a buffer to prevent extreme forces
           const f = (this.charge * this.alpha) / (distSq + 100);
           const fx = f * (dx / dist);
@@ -401,9 +401,13 @@ export class WikiGraph {
     for (const node of this.nodes) {
       if (node.isDragging) continue;
 
-      // Center force pull
-      node.vx += (cx - node.x) * this.centerStrength * this.alpha;
-      node.vy += (cy - node.y) * this.centerStrength * this.alpha;
+      // Center force pull: pull active node strongly to center, others gently
+      let cStrength = this.centerStrength;
+      if (node.isCurrent) {
+        cStrength = this.centerStrength * 10;
+      }
+      node.vx += (cx - node.x) * cStrength * this.alpha;
+      node.vy += (cy - node.y) * cStrength * this.alpha;
 
       // Cap speed
       const speed = Math.sqrt(node.vx * node.vx + node.vy * node.vy);
