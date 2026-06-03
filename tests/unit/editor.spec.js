@@ -55,3 +55,82 @@ test.describe('extractTags', () => {
     expect(tags).toEqual(['win', 'crlf']);
   });
 });
+
+test.describe('parseFrontmatter', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('http://localhost:8080');
+  });
+
+  async function evaluateParseFrontmatter(page, input) {
+    return await page.evaluate(async (text) => {
+      const { parseFrontmatter } = await new Function("return import('/js/editor.js')")();
+      return parseFrontmatter(text);
+    }, input);
+  }
+
+  test('should handle null/empty input', async ({ page }) => {
+    const result1 = await evaluateParseFrontmatter(page, null);
+    expect(result1).toEqual({ tags: [], fields: {} });
+
+    const result2 = await evaluateParseFrontmatter(page, '');
+    expect(result2).toEqual({ tags: [], fields: {} });
+  });
+
+  test('should return empty object for markdown without frontmatter', async ({ page }) => {
+    const result = await evaluateParseFrontmatter(page, '# Heading\nJust some text');
+    expect(result).toEqual({ tags: [], fields: {} });
+  });
+
+  test('should parse frontmatter with only normal fields', async ({ page }) => {
+    const markdown = '---\ntitle: My Note\ndate: 2023-10-27\n---\n# Content';
+    const result = await evaluateParseFrontmatter(page, markdown);
+    expect(result).toEqual({
+      tags: [],
+      fields: {
+        title: 'My Note',
+        date: '2023-10-27'
+      }
+    });
+  });
+
+  test('should parse frontmatter with tags in bracket format', async ({ page }) => {
+    const markdown = '---\ntags: [javascript, testing]\n---\n# Content';
+    const result = await evaluateParseFrontmatter(page, markdown);
+    expect(result).toEqual({
+      tags: ['javascript', 'testing'],
+      fields: {}
+    });
+  });
+
+  test('should parse frontmatter with tags in comma-separated format', async ({ page }) => {
+    const markdown = '---\ntags: javascript, testing\n---\n# Content';
+    const result = await evaluateParseFrontmatter(page, markdown);
+    expect(result).toEqual({
+      tags: ['javascript', 'testing'],
+      fields: {}
+    });
+  });
+
+  test('should parse frontmatter with both fields and tags', async ({ page }) => {
+    const markdown = '---\ntitle: test\ntags: [tag1, tag2]\nauthor: John Doe\n---\n# Content';
+    const result = await evaluateParseFrontmatter(page, markdown);
+    expect(result).toEqual({
+      tags: ['tag1', 'tag2'],
+      fields: {
+        title: 'test',
+        author: 'John Doe'
+      }
+    });
+  });
+
+  test('should handle Windows style line endings (CRLF)', async ({ page }) => {
+    const markdown = '---\r\ntitle: My Note\r\ntags: [win, crlf]\r\n---\r\n# Content';
+    const result = await evaluateParseFrontmatter(page, markdown);
+    expect(result).toEqual({
+      tags: ['win', 'crlf'],
+      fields: {
+        title: 'My Note'
+      }
+    });
+  });
+});
