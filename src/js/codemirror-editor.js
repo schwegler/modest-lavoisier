@@ -1,10 +1,12 @@
-import { EditorView, keymap, drawSelection, highlightActiveLine, Decoration, ViewPlugin } from 'https://esm.sh/@codemirror/view';
+import { EditorView, keymap, drawSelection, highlightActiveLine, Decoration, ViewPlugin, WidgetType } from 'https://esm.sh/@codemirror/view';
 import { EditorState, Compartment, EditorSelection } from 'https://esm.sh/@codemirror/state';
 import { history, defaultKeymap, historyKeymap, indentWithTab } from 'https://esm.sh/@codemirror/commands';
 import { markdown } from 'https://esm.sh/@codemirror/lang-markdown';
+import { GFM } from 'https://esm.sh/@lezer/markdown';
 import { syntaxHighlighting, HighlightStyle, syntaxTree } from 'https://esm.sh/@codemirror/language';
 import { tags as t } from 'https://esm.sh/@lezer/highlight';
 import { closeBrackets, closeBracketsKeymap } from 'https://esm.sh/@codemirror/autocomplete';
+import { renderMarkdown } from './editor.js';
 
 // Styles to apply to hidden markdown markup elements
 const hiddenMarkerDecoration = Decoration.mark({ class: 'cm-hidden-marker' });
@@ -20,6 +22,245 @@ function getWikiLinkDecoration(pageName) {
   });
 }
 
+function resolveImageUrl(target) {
+  if (!target) return '';
+  if (/^(https?:|data:|blob:)/i.test(target)) {
+    return target;
+  }
+  
+  if (window.app && window.app.pages) {
+    const key = target.toLowerCase();
+    const pagesMap = window.app.pages;
+    
+    // 1. Try exact match
+    let foundPage = pagesMap.get(key);
+    
+    // 2. Try suffix match (e.g. key is "logo.png", stored key is "attachments/logo.png")
+    if (!foundPage) {
+      const suffix = '/' + key;
+      for (const existingKey of pagesMap.keys()) {
+        if (existingKey.endsWith(suffix)) {
+          foundPage = pagesMap.get(existingKey);
+          break;
+        }
+      }
+    }
+    
+    // 3. Try reverse suffix/prefix match (e.g. key is "attachments/logo.png", stored key is "logo.png")
+    if (!foundPage) {
+      for (const [existingKey, pageObj] of pagesMap.entries()) {
+        if (key.endsWith('/' + existingKey) || existingKey.endsWith('/' + key)) {
+          foundPage = pageObj;
+          break;
+        }
+      }
+    }
+
+    if (foundPage && foundPage.url) {
+      return foundPage.url;
+    }
+  }
+  return target;
+}
+
+class ImageWidget extends WidgetType {
+  constructor(src, alt) {
+    super();
+    this.src = src;
+    this.alt = alt;
+  }
+
+  toDOM(view) {
+    const container = document.createElement('div');
+    container.className = 'cm-image-widget-container';
+    
+    const img = document.createElement('img');
+    img.src = this.src;
+    img.alt = this.alt || 'image';
+    img.className = 'cm-image-widget';
+    
+    container.appendChild(img);
+    
+    // Add click event listener to take user to the block for editing
+    container.addEventListener('click', (e) => {
+      try {
+        const pos = view.posAtDOM(container);
+        if (pos !== null && pos !== undefined) {
+          view.dispatch({
+            selection: { anchor: pos, head: pos },
+            scrollIntoView: true
+          });
+          view.focus();
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    });
+
+    return container;
+  }
+
+  eq(other) {
+    return other instanceof ImageWidget && other.src === this.src && other.alt === this.alt;
+  }
+}
+
+function parseMarkdownTable(markdownText) {
+  const lines = markdownText.trim().split('\n');
+  if (lines.length < 1) return null;
+
+  const splitLine = (line) => {
+    const parts = line.split('|').map(s => s.trim());
+    if (parts[0] === '') parts.shift();
+    if (parts[parts.length - 1] === '') parts.pop();
+    return parts;
+  };
+
+  const headers = splitLine(lines[0]);
+  const rows = [];
+
+  for (let i = 2; i < lines.length; i++) {
+    if (lines[i].trim() !== '') {
+      rows.push(splitLine(lines[i]));
+    }
+  }
+
+  return { headers, rows };
+}
+
+class TableWidget extends WidgetType {
+  constructor(rawMarkdown) {
+    super();
+    this.rawMarkdown = rawMarkdown;
+  }
+
+  toDOM(view) {
+    const tableData = parseMarkdownTable(this.rawMarkdown);
+    if (!tableData) {
+      const errorDiv = document.createElement('div');
+      errorDiv.textContent = 'Invalid table';
+      return errorDiv;
+    }
+
+    const container = document.createElement('div');
+    container.className = 'cm-live-table-container';
+
+    const table = document.createElement('table');
+    table.className = 'cm-live-table';
+    
+    const pagesMap = (window.app && window.app.pages) ? window.app.pages : new Map();
+
+    if (tableData.headers.length > 0) {
+      const thead = document.createElement('thead');
+      const tr = document.createElement('tr');
+      tableData.headers.forEach(h => {
+        const th = document.createElement('th');
+        let html = renderMarkdown(h, pagesMap).trim();
+        if (html.startsWith('<p>') && html.endsWith('</p>')) {
+          html = html.substring(3, html.length - 4);
+        }
+        th.innerHTML = html;
+        tr.appendChild(th);
+      });
+      thead.appendChild(tr);
+      table.appendChild(thead);
+    }
+
+    const tbody = document.createElement('tbody');
+    tableData.rows.forEach((row, rIdx) => {
+      const tr = document.createElement('tr');
+      row.forEach(cell => {
+        const td = document.createElement('td');
+        let html = renderMarkdown(cell, pagesMap).trim();
+        if (html.startsWith('<p>') && html.endsWith('</p>')) {
+          html = html.substring(3, html.length - 4);
+        }
+        td.innerHTML = html;
+        tr.appendChild(td);
+      });
+      for (let i = row.length; i < tableData.headers.length; i++) {
+        const td = document.createElement('td');
+        tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    container.appendChild(table);
+
+    // Add click event listener to take user to the block for editing
+    container.addEventListener('click', (e) => {
+      if (e.target.closest('a')) {
+        return; // Don't intercept clicks on active links inside the table
+      }
+      try {
+        const pos = view.posAtDOM(container);
+        if (pos !== null && pos !== undefined) {
+          view.dispatch({
+            selection: { anchor: pos, head: pos },
+            scrollIntoView: true
+          });
+          view.focus();
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    });
+
+    return container;
+  }
+
+  eq(other) {
+    return other instanceof TableWidget && other.rawMarkdown === this.rawMarkdown;
+  }
+}
+
+class BulletWidget extends WidgetType {
+  toDOM(view) {
+    const bullet = document.createElement('span');
+    bullet.className = 'cm-bullet-marker';
+    bullet.innerHTML = '&bull;';
+    return bullet;
+  }
+
+  eq(other) {
+    return other instanceof BulletWidget;
+  }
+}
+
+class TaskWidget extends WidgetType {
+  constructor(checked) {
+    super();
+    this.checked = checked;
+  }
+
+  toDOM(view) {
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.className = 'cm-task-checkbox';
+    checkbox.checked = this.checked;
+    
+    checkbox.addEventListener('change', (e) => {
+      try {
+        const pos = view.posAtDOM(checkbox);
+        if (pos !== null && pos !== undefined) {
+          const newChar = checkbox.checked ? 'x' : ' ';
+          view.dispatch({
+            changes: { from: pos + 1, to: pos + 2, insert: newChar }
+          });
+        }
+      } catch (err) {
+        console.error("Failed to find task checkbox position:", err);
+      }
+    });
+
+    return checkbox;
+  }
+
+  eq(other) {
+    return other instanceof TaskWidget && other.checked === this.checked;
+  }
+}
+
 /**
  * CodeMirror 6 ViewPlugin that dynamically hides markdown syntax markers
  * (bold, italic, inline code, headings, and links) unless the cursor/selection
@@ -27,11 +268,15 @@ function getWikiLinkDecoration(pageName) {
  */
 const livePreviewPlugin = ViewPlugin.fromClass(class {
   constructor(view) {
+    this.hasFocus = view.hasFocus;
     this.decorations = this.buildDecorations(view);
   }
 
   update(update) {
-    if (update.docChanged || update.selectionSet || update.viewportChanged || syntaxTree(update.state) !== syntaxTree(update.startState)) {
+    const focusChanged = update.view.hasFocus !== this.hasFocus;
+    this.hasFocus = update.view.hasFocus;
+
+    if (focusChanged || update.docChanged || update.selectionSet || update.viewportChanged || syntaxTree(update.state) !== syntaxTree(update.startState)) {
       this.decorations = this.buildDecorations(update.view);
     }
   }
@@ -42,6 +287,7 @@ const livePreviewPlugin = ViewPlugin.fromClass(class {
 
     // Helper to check if selection intersects with range [from, to] (inclusive)
     function cursorIntersects(from, to) {
+      if (!view.hasFocus) return false;
       return cursors.some(range => {
         return (range.from >= from && range.from <= to) || 
                (range.to >= from && range.to <= to) || 
@@ -128,30 +374,90 @@ const livePreviewPlugin = ViewPlugin.fromClass(class {
           }
           // 6. GFM Tables
           else if (type === 'Table') {
-            builder.push(Decoration.mark({ class: 'cm-table-row' }).range(node.from, node.to));
+            if (!cursorIntersects(node.from, node.to)) {
+              const rawTableText = view.state.sliceDoc(node.from, node.to);
+              
+              // Add a widget containing the visual table before the first line
+              builder.push(Decoration.widget({
+                widget: new TableWidget(rawTableText),
+                side: -1
+              }).range(node.from));
+
+              // Hide the text on each line of the table individually (to avoid line break replacement error)
+              let pos = node.from;
+              while (pos < node.to) {
+                const line = view.state.doc.lineAt(pos);
+                if (line.to > line.from) {
+                  const hideTo = Math.min(line.to, node.to);
+                  builder.push(Decoration.replace({}).range(line.from, hideTo));
+                }
+                pos = line.to + 1;
+              }
+            } else {
+              builder.push(Decoration.mark({ class: 'cm-table-row' }).range(node.from, node.to));
+            }
+          }
+          // 7. Standard Image (e.g. ![alt](url))
+          else if (type === 'Image') {
+            if (!cursorIntersects(node.from, node.to)) {
+              const rawImageText = view.state.sliceDoc(node.from, node.to);
+              const match = /!\[([^\]]*)\]\(([^)]+)\)/.exec(rawImageText);
+              if (match) {
+                const alt = match[1];
+                const url = match[2];
+                const resolvedUrl = resolveImageUrl(url);
+                builder.push(Decoration.replace({
+                  widget: new ImageWidget(resolvedUrl, alt),
+                  inclusive: false
+                }).range(node.from, node.to));
+              }
+            }
+          }
+          // 8. List Marker (bullets)
+          else if (type === 'ListMark') {
+            if (!cursorIntersects(node.from, node.to)) {
+              const markerText = view.state.sliceDoc(node.from, node.to);
+              if (markerText === '-' || markerText === '*' || markerText === '+') {
+                builder.push(Decoration.replace({
+                  widget: new BulletWidget(),
+                  inclusive: false
+                }).range(node.from, node.to));
+              }
+            }
+          }
+          // 9. Task Marker (checklists [ ] / [x])
+          else if (type === 'TaskMarker') {
+            if (!cursorIntersects(node.from, node.to)) {
+              const markerText = view.state.sliceDoc(node.from, node.to);
+              const checked = markerText.toLowerCase().includes('x');
+              builder.push(Decoration.replace({
+                widget: new TaskWidget(checked),
+                inclusive: false
+              }).range(node.from, node.to));
+            }
           }
         }
       });
-
-      // 6. Wiki links: [[Page Name]] or [[Page Name|Label]]
+ 
+      // 10. Wiki links: [[Page Name]] or [[Page Name|Label]] (ignoring ![[)
       const text = view.state.sliceDoc(from, to);
-      const wikiLinkRegex = /\[\[([^\]]+)\]\]/g;
+      const wikiLinkRegex = /(?<!\!)\[\[([^\]]+)\]\]/g;
       let match;
       while ((match = wikiLinkRegex.exec(text)) !== null) {
         const matchStart = from + match.index;
         const matchEnd = matchStart + match[0].length;
         const isCursorInside = cursorIntersects(matchStart, matchEnd);
-
+ 
         if (!isCursorInside) {
           // Hide [[ and ]]
           builder.push(hiddenMarkerDecoration.range(matchStart, matchStart + 2));
           builder.push(hiddenMarkerDecoration.range(matchEnd - 2, matchEnd));
-
+ 
           const innerText = match[1];
           const pipeIndex = innerText.indexOf('|');
           const pageTarget = pipeIndex !== -1 ? innerText.substring(0, pipeIndex).trim() : innerText.trim();
           const wikiLinkDeco = getWikiLinkDecoration(pageTarget);
-
+ 
           if (pipeIndex !== -1) {
             // Hide "Page Name|"
             const pipePos = matchStart + 2 + pipeIndex;
@@ -168,13 +474,35 @@ const livePreviewPlugin = ViewPlugin.fromClass(class {
           const pipeIndex = innerText.indexOf('|');
           const pageTarget = pipeIndex !== -1 ? innerText.substring(0, pipeIndex).trim() : innerText.trim();
           const wikiLinkDeco = getWikiLinkDecoration(pageTarget);
-
+ 
           if (pipeIndex !== -1) {
             const pipePos = matchStart + 2 + pipeIndex;
             builder.push(wikiLinkDeco.range(pipePos + 1, matchEnd - 2));
           } else {
             builder.push(wikiLinkDeco.range(matchStart + 2, matchEnd - 2));
           }
+        }
+      }
+
+      // 11. Wiki images: ![[Page Name]] or ![[Page Name|Label]]
+      const wikiImageRegex = /!\[\[([^\]]+)\]\]/g;
+      let imgMatch;
+      while ((imgMatch = wikiImageRegex.exec(text)) !== null) {
+        const matchStart = from + imgMatch.index;
+        const matchEnd = matchStart + imgMatch[0].length;
+        const isCursorInside = cursorIntersects(matchStart, matchEnd);
+
+        if (!isCursorInside) {
+          const innerText = imgMatch[1];
+          const pipeIndex = innerText.indexOf('|');
+          const pageTarget = pipeIndex !== -1 ? innerText.substring(0, pipeIndex).trim() : innerText.trim();
+          const altText = pipeIndex !== -1 ? innerText.substring(pipeIndex + 1).trim() : '';
+
+           const resolvedUrl = resolveImageUrl(pageTarget);
+          builder.push(Decoration.replace({
+            widget: new ImageWidget(resolvedUrl, altText),
+            inclusive: false
+          }).range(matchStart, matchEnd));
         }
       }
     }
@@ -221,7 +549,7 @@ export class CodeMirrorEditor {
           ...closeBracketsKeymap,
           indentWithTab
         ]),
-        markdown(),
+        markdown({ extensions: [GFM] }),
         syntaxHighlighting(customHighlightStyle, { fallback: true }),
         livePreviewPlugin,
         EditorView.lineWrapping,
@@ -234,7 +562,23 @@ export class CodeMirrorEditor {
           }
         }),
         EditorView.domEventHandlers({
+          focus: (event, view) => {
+            view.dispatch({});
+          },
+          blur: (event, view) => {
+            view.dispatch({});
+          },
           click: (event, view) => {
+            // Check if user clicked in the margins (left or right of .cm-content)
+            const contentEl = view.dom.querySelector('.cm-content');
+            if (contentEl) {
+              const rect = contentEl.getBoundingClientRect();
+              if (event.clientX < rect.left || event.clientX > rect.right) {
+                view.contentDOM.blur();
+                return true;
+              }
+            }
+
             const target = event.target;
             if (target && target.classList.contains('cm-live-link')) {
               const isCmdOrCtrl = event.metaKey || event.ctrlKey;
@@ -250,7 +594,7 @@ export class CodeMirrorEditor {
           },
           dragover: (event, view) => {
             const types = event.dataTransfer.types;
-            if (types && (types.includes('application/x-page-name') || types.includes('Files'))) {
+            if (types && (types.includes('application/x-page-name') || types.includes('text/plain') || types.includes('Files'))) {
               event.preventDefault();
               event.stopPropagation();
               event.dataTransfer.dropEffect = 'copy';
@@ -259,11 +603,23 @@ export class CodeMirrorEditor {
           },
           drop: (event, view) => {
             // 1. First check for sidebar drags (internal page/image drag)
-            const pageName = event.dataTransfer.getData('application/x-page-name');
+            let pageName = event.dataTransfer.getData('application/x-page-name');
+            if (!pageName) {
+              const plainText = event.dataTransfer.getData('text/plain');
+              if (plainText && window.app && window.app.pages.has(plainText.toLowerCase())) {
+                pageName = plainText;
+              }
+            }
             if (pageName) {
               event.preventDefault();
               event.stopPropagation();
-              const isImage = event.dataTransfer.getData('application/x-is-image') === 'true';
+              let isImage = event.dataTransfer.getData('application/x-is-image') === 'true';
+              if (!isImage && window.app) {
+                const pageObj = window.app.pages.get(pageName.toLowerCase());
+                if (pageObj && pageObj.isImage) {
+                  isImage = true;
+                }
+              }
               const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
               if (pos !== null) {
                 const insertText = isImage ? `![[${pageName}]]` : `[[${pageName}]]`;
@@ -327,6 +683,10 @@ export class CodeMirrorEditor {
         color: "var(--text)",
         fontFamily: "var(--font-mono)",
         fontSize: "14px",
+        border: "none !important",
+      },
+      "&.cm-focused": {
+        outline: "none !important",
       },
       ".cm-scroller": {
         overflow: "auto",

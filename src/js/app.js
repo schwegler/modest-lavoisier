@@ -26,6 +26,8 @@ class NativeNodesApp {
     this.isSandbox = false;
     this.selectedTag = null;
     this.saveTimeout = null;
+    this.pinnedNotes = new Set();
+    this.newNoteFolderPrefix = '';
 
     // Check if running in Tauri desktop environment
     this.isTauri = !!(window.__TAURI__);
@@ -57,6 +59,8 @@ class NativeNodesApp {
       sidebarNewBtn: document.getElementById('sidebarNewBtn'),
       sidebarCollapseAllBtn: document.getElementById('sidebarCollapseAllBtn'),
       fileList: document.getElementById('fileList'),
+      pinnedSection: document.getElementById('pinnedSection'),
+      pinnedList: document.getElementById('pinnedList'),
       tagList: document.getElementById('tagList'),
       activeWorkspaceName: document.getElementById('activeWorkspaceName'),
       changeWorkspaceBtn: document.getElementById('changeWorkspaceBtn'),
@@ -268,13 +272,9 @@ class NativeNodesApp {
    * Restores settings from DB cache.
    */
   async loadPreferences() {
-    // Theme
+    // Theme (Default to system)
     const savedTheme = await getSetting('theme');
-    if (savedTheme) {
-      this.setTheme(savedTheme);
-    } else {
-      this.setTheme('dracula');
-    }
+    this.setTheme(savedTheme || 'system');
 
     // Layout
     const savedLayout = await getSetting('layout');
@@ -288,9 +288,17 @@ class NativeNodesApp {
 
     // Expanded folders state
     const savedExpanded = await getSetting('expandedFolders');
-    this.expandedFolders = savedExpanded ? new Set(savedExpanded) : null;
+    if (savedExpanded) {
+      this.expandedFolders = new Set(savedExpanded);
+    }
 
-    // Properties collapsed state
+    // Pinned notes state
+    const savedPinned = await getSetting('pinnedNotes');
+    if (savedPinned) {
+      this.pinnedNotes = new Set(savedPinned);
+    }
+
+    // Properties drawer collapsed state
     const savedCollapsed = await getSetting('propertiesCollapsed');
     if (savedCollapsed !== undefined) {
       this.dom.propertiesContainer.classList.toggle('collapsed', savedCollapsed);
@@ -304,15 +312,26 @@ class NativeNodesApp {
     this.theme = theme;
     document.documentElement.setAttribute('data-theme', theme);
     setSetting('theme', theme);
+    try {
+      localStorage.setItem('theme', theme);
+    } catch (e) {}
 
     if (this.dom.themeDropdownMenu) {
       this.dom.themeDropdownMenu.querySelectorAll('.dropdown-item').forEach(item => {
-        item.classList.toggle('active', item.dataset.themeId === theme);
+        const isActive = item.dataset.themeId === theme;
+        item.classList.toggle('active', isActive);
+        item.setAttribute('aria-selected', isActive ? 'true' : 'false');
       });
     }
 
+    let isDark;
+    if (theme === 'system') {
+      isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    } else {
+      isDark = ['dracula', 'onedark', 'nord', 'gruvbox-dark', 'solarized-dark', 'monokai', 'tokyonight', 'catppuccin', 'github-dark', 'dark'].includes(theme);
+    }
+
     try {
-      const isDark = ['dracula', 'onedark', 'nord', 'gruvbox-dark', 'solarized-dark', 'monokai', 'tokyonight', 'catppuccin', 'github-dark', 'dark'].includes(theme);
       mermaid.initialize({
         theme: isDark ? 'dark' : 'default'
       });
@@ -323,7 +342,6 @@ class NativeNodesApp {
     }
 
     if (this.graph) {
-      const isDark = ['dracula', 'onedark', 'nord', 'gruvbox-dark', 'solarized-dark', 'monokai', 'tokyonight', 'catppuccin', 'github-dark', 'dark'].includes(theme);
       this.graph.updateData(
         this.getGraphNodes(),
         this.getGraphLinks(),
@@ -390,6 +408,13 @@ class NativeNodesApp {
    * Sets up click handlers, routing and key listeners.
    */
   setupEventListeners() {
+    // Listen for OS color scheme change
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+      if (this.theme === 'system') {
+        this.setTheme('system');
+      }
+    });
+
     // Landing Page Controls
     this.dom.openFolderBtn.addEventListener('click', () => this.selectWorkspace());
     this.dom.demoWorkspaceBtn.addEventListener('click', () => this.startSandboxDemo());
@@ -515,6 +540,36 @@ class NativeNodesApp {
       }
     });
 
+    if (this.dom.customContextMenu) {
+      this.dom.customContextMenu.addEventListener('keydown', (e) => {
+        const items = Array.from(this.dom.customContextMenu.querySelectorAll('.context-menu-item'));
+        const activeIdx = items.indexOf(document.activeElement);
+
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          const nextIdx = (activeIdx + 1) % items.length;
+          items[nextIdx].focus();
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          const prevIdx = (activeIdx - 1 + items.length) % items.length;
+          items[prevIdx].focus();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          this.dom.customContextMenu.style.display = 'none';
+          if (this.contextMenuTrigger) {
+            this.contextMenuTrigger.focus();
+            this.contextMenuTrigger = null;
+          }
+        } else if (e.key === 'Tab') {
+          this.dom.customContextMenu.style.display = 'none';
+          if (this.contextMenuTrigger) {
+            this.contextMenuTrigger.focus();
+            this.contextMenuTrigger = null;
+          }
+        }
+      });
+    }
+
     document.addEventListener('contextmenu', (e) => {
       if (this.dom.customContextMenu && !e.target.closest('.folder-title') && !e.target.closest('.file-item') && !e.target.closest('.folder-item')) {
         this.dom.customContextMenu.style.display = 'none';
@@ -528,9 +583,58 @@ class NativeNodesApp {
     });
     this.dom.fileList.addEventListener('drop', async (e) => {
       e.preventDefault();
-      const pageName = e.dataTransfer.getData('application/x-page-name');
-      if (pageName) {
+      const pageName = e.dataTransfer.getData('application/x-page-name') || e.dataTransfer.getData('text/plain');
+      if (pageName && this.pages.has(pageName.toLowerCase())) {
         await this.movePageToFolder(pageName, '');
+      }
+    });
+
+    // Workspace panels drop targets (excluding CodeMirror content area)
+    this.dom.workspacePanels.addEventListener('dragover', (e) => {
+      const types = e.dataTransfer.types;
+      if (types && (types.includes('application/x-page-name') || types.includes('text/plain'))) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+      }
+    });
+
+    this.dom.workspacePanels.addEventListener('drop', (e) => {
+      let pageName = e.dataTransfer.getData('application/x-page-name');
+      if (!pageName) {
+        const plainText = e.dataTransfer.getData('text/plain');
+        if (plainText && this.pages.has(plainText.toLowerCase())) {
+          pageName = plainText;
+        }
+      }
+      if (!pageName) return;
+
+      const isInsideCM = e.target.closest('.cm-editor');
+      if (isInsideCM) {
+        // Let CodeMirror handle it directly (already implemented in codemirror-editor.js)
+        return;
+      }
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      let isImage = e.dataTransfer.getData('application/x-is-image') === 'true';
+      if (!isImage && pageName) {
+        const pageObj = this.pages.get(pageName.toLowerCase());
+        if (pageObj && pageObj.isImage) {
+          isImage = true;
+        }
+      }
+      const insertText = isImage ? `![[${pageName}]]` : `[[${pageName}]]`;
+
+      if (this.layout === 'preview') {
+        this.appendToActivePageEnd(insertText);
+      } else {
+        const isInsidePreview = e.target.closest('#previewPanel');
+        if (isInsidePreview) {
+          this.appendToActivePageEnd(insertText);
+        } else {
+          this.insertAtCursorOrEnd(insertText);
+        }
       }
     });
 
@@ -551,11 +655,23 @@ class NativeNodesApp {
     // Initialize Theme Picker
     this.populateThemePicker();
 
-    // Collapsible Properties Panel Header listener
+    // Collapsible Properties Panel Header listener (Accessible)
+    this.dom.propertiesHeader.tabIndex = 0;
+    this.dom.propertiesHeader.setAttribute('role', 'button');
+    this.dom.propertiesHeader.setAttribute('aria-expanded', this.dom.propertiesContainer.classList.contains('collapsed') ? 'false' : 'true');
+    
     this.dom.propertiesHeader.addEventListener('click', () => {
       const collapsed = this.dom.propertiesContainer.classList.contains('collapsed');
       this.dom.propertiesContainer.classList.toggle('collapsed', !collapsed);
+      this.dom.propertiesHeader.setAttribute('aria-expanded', collapsed ? 'true' : 'false');
       setSetting('propertiesCollapsed', !collapsed);
+    });
+
+    this.dom.propertiesHeader.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        this.dom.propertiesHeader.click();
+      }
     });
 
     // Properties Add property button listener
@@ -639,9 +755,11 @@ class NativeNodesApp {
       e.preventDefault();
       const title = this.dom.newNoteName.value.trim();
       if (title) {
-        this.createNewPage(title);
+        const fullTitle = this.newNoteFolderPrefix ? `${this.newNoteFolderPrefix}/${title}` : title;
+        this.createNewPage(fullTitle);
         this.dom.newNoteModal.close();
         this.dom.newNoteName.value = '';
+        this.newNoteFolderPrefix = '';
       }
     });
 
@@ -1140,12 +1258,152 @@ class NativeNodesApp {
     const activeTag = this.selectedTag ? this.selectedTag.toLowerCase() : null;
     this.dom.fileList.innerHTML = '';
 
+    this._renderPinnedList(filter, activeTag);
+
     if (filter) {
       this._renderFlatFileList(filter, activeTag);
       return;
     }
 
     this._renderDirectoryTree(activeTag);
+  }
+
+  _renderPinnedList(filter, activeTag) {
+    if (!this.dom.pinnedList || !this.dom.pinnedSection) return;
+
+    this.dom.pinnedList.innerHTML = '';
+    
+    if (this.pinnedNotes.size === 0) {
+      this.dom.pinnedSection.style.display = 'none';
+      return;
+    }
+
+    let visibleCount = 0;
+    const pinnedPages = [];
+    for (const key of this.pinnedNotes) {
+      const page = this.pages.get(key);
+      if (page) {
+        pinnedPages.push(page);
+      }
+    }
+    pinnedPages.sort((a, b) => a.name.localeCompare(b.name));
+
+    for (const page of pinnedPages) {
+      if (!this._matchesFilters(page, filter, activeTag)) {
+        continue;
+      }
+
+      visibleCount++;
+      const li = document.createElement('li');
+      const isActive = this.activePage && page.name.toLowerCase() === this.activePage.name.toLowerCase();
+      li.className = `file-item pinned-item ${isActive ? 'active' : ''}`;
+
+      const iconHTML = page.isImage 
+        ? `<svg class="file-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+             <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+             <circle cx="8.5" cy="8.5" r="1.5"></circle>
+             <polyline points="21 15 16 10 5 21"></polyline>
+           </svg>`
+        : `<svg class="file-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+             <polyline points="14 2 14 8 20 8"></polyline>
+             <line x1="16" y1="13" x2="8" y2="13"></line>
+             <line x1="16" y1="17" x2="8" y2="17"></line>
+           </svg>`;
+
+      li.innerHTML = `
+        ${iconHTML}
+        <span class="file-name" style="flex-grow: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(page.name)}</span>
+        <svg class="pinned-indicator-icon" viewBox="0 0 24 24" width="12" height="12" fill="currentColor" style="opacity: 0.6; flex-shrink: 0; margin-left: 6px;">
+          <path d="M16 12V4c0-1.1-.9-2-2-2h-4c-1.1 0-2 .9-2 2v8l-2 2v2h14v-2l-2-2zM12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2z"/>
+        </svg>
+      `;
+
+      li.tabIndex = 0;
+      li.setAttribute('role', 'button');
+      li.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          li.click();
+        }
+      });
+
+      li.addEventListener('click', (e) => {
+        e.stopPropagation();
+        window.location.hash = `#/page/${encodeURIComponent(page.name)}`;
+      });
+
+      li.draggable = true;
+      li.addEventListener('dragstart', (e) => {
+        e.stopPropagation();
+        e.dataTransfer.effectAllowed = 'all';
+        e.dataTransfer.setData('text/plain', page.name);
+        e.dataTransfer.setData('application/x-page-name', page.name);
+        e.dataTransfer.setData('application/x-is-image', page.isImage ? 'true' : 'false');
+      });
+
+      li.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.showContextMenu(e, 'file', page);
+      });
+
+      this.dom.pinnedList.appendChild(li);
+    }
+
+    if (visibleCount > 0) {
+      this.dom.pinnedSection.style.display = 'block';
+    } else {
+      this.dom.pinnedSection.style.display = 'none';
+    }
+  }
+
+  togglePinNote(pageName) {
+    const key = pageName.toLowerCase();
+    if (this.pinnedNotes.has(key)) {
+      this.pinnedNotes.delete(key);
+    } else {
+      this.pinnedNotes.add(key);
+    }
+    setSetting('pinnedNotes', Array.from(this.pinnedNotes));
+    this.renderFileList();
+  }
+
+  appendToActivePageEnd(text) {
+    if (!this.activePage) return;
+    const view = this.editor.view;
+    if (!view) return;
+    const docLength = view.state.doc.length;
+    let insertText = text;
+    if (docLength > 0) {
+      const currentDoc = view.state.doc.toString();
+      if (!currentDoc.endsWith('\n')) {
+        insertText = '\n' + text;
+      }
+    }
+    view.dispatch({
+      changes: { from: docLength, insert: insertText }
+    });
+    this.markAsDirty();
+    this.triggerAutoSave();
+    this.renderPreview();
+  }
+
+  insertAtCursorOrEnd(text) {
+    if (!this.activePage) return;
+    const view = this.editor.view;
+    if (!view) return;
+    const ranges = view.state.selection.ranges;
+    if (ranges.length > 0 && view.hasFocus) {
+      const range = ranges[0];
+      view.dispatch({
+        changes: { from: range.from, to: range.to, insert: text },
+        selection: { anchor: range.from + text.length }
+      });
+      view.focus();
+    } else {
+      this.appendToActivePageEnd(text);
+    }
   }
 
   _matchesFilters(page, filter, activeTag) {
@@ -1189,6 +1447,15 @@ class NativeNodesApp {
         ${iconHTML}
         <span>${escapeHTML(page.name)}</span>
       `;
+
+      li.tabIndex = 0;
+      li.setAttribute('role', 'button');
+      li.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          li.click();
+        }
+      });
 
       li.addEventListener('click', () => {
         window.location.hash = `#/page/${encodeURIComponent(page.name)}`;
@@ -1273,6 +1540,10 @@ class NativeNodesApp {
       const childrenUl = folderLi.querySelector('.folder-children');
       const chevron = folderLi.querySelector('.chevron-icon');
 
+      titleDiv.tabIndex = 0;
+      titleDiv.setAttribute('role', 'button');
+      titleDiv.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+
       titleDiv.addEventListener('click', (e) => {
         e.stopPropagation();
         const currentlyExpanded = this.expandedFolders.has(dirKey);
@@ -1280,12 +1551,21 @@ class NativeNodesApp {
           this.expandedFolders.delete(dirKey);
           childrenUl.style.display = 'none';
           chevron.classList.remove('expanded');
+          titleDiv.setAttribute('aria-expanded', 'false');
         } else {
           this.expandedFolders.add(dirKey);
           childrenUl.style.display = 'block';
           chevron.classList.add('expanded');
+          titleDiv.setAttribute('aria-expanded', 'true');
         }
         setSetting('expandedFolders', Array.from(this.expandedFolders));
+      });
+
+      titleDiv.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          titleDiv.click();
+        }
       });
 
       titleDiv.addEventListener('dragover', (e) => {
@@ -1301,8 +1581,8 @@ class NativeNodesApp {
         e.preventDefault();
         e.stopPropagation();
         titleDiv.classList.remove('drag-over');
-        const pageName = e.dataTransfer.getData('application/x-page-name');
-        if (pageName) {
+        const pageName = e.dataTransfer.getData('application/x-page-name') || e.dataTransfer.getData('text/plain');
+        if (pageName && this.pages.has(pageName.toLowerCase())) {
           await this.movePageToFolder(pageName, fullDirPath);
         }
       });
@@ -1341,6 +1621,15 @@ class NativeNodesApp {
         ${iconHTML}
         <span>${escapeHTML(displayTitle)}</span>
       `;
+
+      fileLi.tabIndex = 0;
+      fileLi.setAttribute('role', 'button');
+      fileLi.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          fileLi.click();
+        }
+      });
 
       fileLi.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1391,7 +1680,12 @@ class NativeNodesApp {
       const preferredLayout = await getSetting('layout') || 'edit';
       this.setLayout(preferredLayout);
       this.dom.activeNoteTitle.textContent = page.name;
-      this.editor.setMarkdown(stripFrontmatter(page.content));
+      
+      const contentText = stripFrontmatter(page.content);
+      // Pre-load embedded image blobs before editor mounts/updates content
+      await this.loadEmbeddedImages(contentText);
+      
+      this.editor.setMarkdown(contentText);
       this.renderProperties();
       this.markAsClean();
       await this.renderPreview();
@@ -1993,7 +2287,19 @@ class NativeNodesApp {
     }
   }
 
-  openNewNoteModal() {
+  openNewNoteModal(folderPrefix = '') {
+    this.newNoteFolderPrefix = folderPrefix;
+    const titleEl = document.getElementById('newNoteModalTitle');
+    const labelEl = this.dom.newNoteModal.querySelector('label[for="newNoteName"]');
+    
+    if (folderPrefix) {
+      if (titleEl) titleEl.textContent = `Create Page in "${folderPrefix}"`;
+      if (labelEl) labelEl.textContent = `Page Title (will create as "${folderPrefix}/<title>")`;
+    } else {
+      if (titleEl) titleEl.textContent = 'Create New Page';
+      if (labelEl) labelEl.textContent = 'Page Title';
+    }
+    
     this.dom.newNoteModal.showModal();
     this.dom.newNoteName.focus();
   }
@@ -2308,8 +2614,10 @@ class NativeNodesApp {
 
   highlightSuggestion(items, index) {
     items.forEach((item, idx) => {
-      item.classList.toggle('active', idx === index);
-      if (idx === index) {
+      const active = idx === index;
+      item.classList.toggle('active', active);
+      item.setAttribute('aria-selected', active ? 'true' : 'false');
+      if (active) {
         item.scrollIntoView({ block: 'nearest' });
       }
     });
@@ -2319,12 +2627,16 @@ class NativeNodesApp {
     const dropdown = this.dom.tagAutocompleteDropdown;
     dropdown.innerHTML = '';
     dropdown.style.display = 'block';
+    dropdown.setAttribute('role', 'listbox');
+    dropdown.setAttribute('aria-label', 'Tag suggestions');
     
     tags.forEach(tag => {
       const item = document.createElement('div');
       item.className = 'autocomplete-item';
       item.textContent = tag;
       item.setAttribute('data-tag', tag);
+      item.setAttribute('role', 'option');
+      item.setAttribute('aria-selected', 'false');
       item.addEventListener('click', () => {
         this.addTag(tag);
       });
@@ -2339,6 +2651,9 @@ class NativeNodesApp {
 
   populateThemePicker() {
     const THEMES = {
+      'system': { name: 'System Preference', mode: 'auto' },
+      'light': { name: 'Light Mode', mode: 'light' },
+      'dark': { name: 'Dark Mode', mode: 'dark' },
       'dracula': { name: 'Dracula', mode: 'dark' },
       'onedark': { name: 'One Dark', mode: 'dark' },
       'nord': { name: 'Nord', mode: 'dark' },
@@ -2355,14 +2670,21 @@ class NativeNodesApp {
     
     this.dom.themeDropdownMenu.innerHTML = '';
     for (const [themeId, themeData] of Object.entries(THEMES)) {
-      const btn = document.createElement('div');
-      btn.className = `dropdown-item ${this.theme === themeId ? 'active' : ''}`;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      const isActive = this.theme === themeId;
+      btn.className = `dropdown-item ${isActive ? 'active' : ''}`;
       btn.dataset.themeId = themeId;
       btn.textContent = themeData.name;
+      btn.setAttribute('role', 'option');
+      btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
       
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
         this.setTheme(themeId);
         this.dom.themeDropdownMenu.style.display = 'none';
+        this.dom.themePickerBtn.setAttribute('aria-expanded', 'false');
+        this.dom.themePickerBtn.focus();
       });
       
       this.dom.themeDropdownMenu.appendChild(btn);
@@ -2373,10 +2695,43 @@ class NativeNodesApp {
       e.stopPropagation();
       const visible = this.dom.themeDropdownMenu.style.display === 'flex';
       this.dom.themeDropdownMenu.style.display = visible ? 'none' : 'flex';
+      this.dom.themePickerBtn.setAttribute('aria-expanded', visible ? 'false' : 'true');
+      if (!visible) {
+        // Focus the active item or first item
+        const activeItem = this.dom.themeDropdownMenu.querySelector('.dropdown-item.active') || this.dom.themeDropdownMenu.querySelector('.dropdown-item');
+        if (activeItem) activeItem.focus();
+      }
+    });
+
+    // Keyboard navigation within the dropdown
+    this.dom.themeDropdownMenu.addEventListener('keydown', (e) => {
+      const items = Array.from(this.dom.themeDropdownMenu.querySelectorAll('.dropdown-item'));
+      const activeIdx = items.indexOf(document.activeElement);
+      
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const nextIdx = (activeIdx + 1) % items.length;
+        items[nextIdx].focus();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const prevIdx = (activeIdx - 1 + items.length) % items.length;
+        items[prevIdx].focus();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        this.dom.themeDropdownMenu.style.display = 'none';
+        this.dom.themePickerBtn.setAttribute('aria-expanded', 'false');
+        this.dom.themePickerBtn.focus();
+      } else if (e.key === 'Tab') {
+        this.dom.themeDropdownMenu.style.display = 'none';
+        this.dom.themePickerBtn.setAttribute('aria-expanded', 'false');
+      }
     });
     
     document.addEventListener('click', () => {
-      this.dom.themeDropdownMenu.style.display = 'none';
+      if (this.dom.themeDropdownMenu.style.display === 'flex') {
+        this.dom.themeDropdownMenu.style.display = 'none';
+        this.dom.themePickerBtn.setAttribute('aria-expanded', 'false');
+      }
     });
   }
 
@@ -2413,13 +2768,13 @@ class NativeNodesApp {
             <line x1="10" y1="3" x2="8" y2="21"></line>
             <line x1="16" y1="3" x2="14" y2="21"></line>
           </svg>
-          <input type="text" class="property-key" value="${escapeHTML(key)}" placeholder="property name">
+          <input type="text" class="property-key" value="${escapeHTML(key)}" placeholder="property name" aria-label="Property Name">
         </div>
         <div>
-          <input type="text" class="property-val-input" value="${escapeHTML(val)}" placeholder="value">
+          <input type="text" class="property-val-input" value="${escapeHTML(val)}" placeholder="value" aria-label="Value for ${escapeHTML(key)}">
         </div>
         <div>
-          <button class="delete-property-btn" title="Delete Property">
+          <button class="delete-property-btn" title="Delete Property" aria-label="Delete property ${escapeHTML(key)}">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="3 6 5 6 21 6"></polyline>
               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -2567,6 +2922,12 @@ class NativeNodesApp {
         this._updatePageNamesIndex(oldName, newName, pageObj);
       }
       
+      if (this.pinnedNotes.has(oldKey)) {
+        this.pinnedNotes.delete(oldKey);
+        this.pinnedNotes.add(newKey);
+        setSetting('pinnedNotes', Array.from(this.pinnedNotes));
+      }
+
       this.activePage = this.pages.get(newKey);
       setSetting('lastOpenedPage', newName);
       this.dom.activeNoteTitle.textContent = newName;
@@ -3004,6 +3365,12 @@ class NativeNodesApp {
     if (!confirmDelete) return;
 
     try {
+      const pageKey = page.name.toLowerCase();
+      if (this.pinnedNotes.has(pageKey)) {
+        this.pinnedNotes.delete(pageKey);
+        setSetting('pinnedNotes', Array.from(this.pinnedNotes));
+      }
+
       if (this.isSandbox) {
         this.pages.delete(page.name.toLowerCase());
         this._removePageFromIndex(page.name);
@@ -3058,6 +3425,18 @@ class NativeNodesApp {
         }
       }
 
+      let pinnedChanged = false;
+      for (const page of pagesToDelete) {
+        const pageKey = page.name.toLowerCase();
+        if (this.pinnedNotes.has(pageKey)) {
+          this.pinnedNotes.delete(pageKey);
+          pinnedChanged = true;
+        }
+      }
+      if (pinnedChanged) {
+        setSetting('pinnedNotes', Array.from(this.pinnedNotes));
+      }
+
       if (this.isSandbox) {
         for (const page of pagesToDelete) {
           this.pages.delete(page.name.toLowerCase());
@@ -3109,27 +3488,36 @@ class NativeNodesApp {
     const menu = this.dom.customContextMenu;
     if (!menu) return;
 
+    // Track triggering element for focus recovery
+    this.contextMenuTrigger = e.currentTarget || document.activeElement;
+
     menu.innerHTML = '';
+    menu.setAttribute('role', 'menu');
+    menu.setAttribute('aria-label', 'Context Options');
     
     if (type === 'folder') {
       const folderPath = data;
-      const newNoteItem = document.createElement('div');
+      const newNoteItem = document.createElement('button');
+      newNoteItem.type = 'button';
       newNoteItem.className = 'context-menu-item';
+      newNoteItem.setAttribute('role', 'menuitem');
       newNoteItem.innerHTML = `
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 4px;">
+        <svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 4px;">
           <line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line>
         </svg>
         New Note
       `;
       newNoteItem.addEventListener('click', () => {
         menu.style.display = 'none';
-        this.promptNewNoteInFolder(folderPath);
+        this.openNewNoteModal(folderPath);
       });
 
-      const deleteFolderItem = document.createElement('div');
+      const deleteFolderItem = document.createElement('button');
+      deleteFolderItem.type = 'button';
       deleteFolderItem.className = 'context-menu-item danger';
+      deleteFolderItem.setAttribute('role', 'menuitem');
       deleteFolderItem.innerHTML = `
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+        <svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
           <polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
         </svg>
         Delete Folder
@@ -3137,16 +3525,41 @@ class NativeNodesApp {
       deleteFolderItem.addEventListener('click', () => {
         menu.style.display = 'none';
         this.deleteFolder(folderPath);
+        if (this.contextMenuTrigger) this.contextMenuTrigger.focus();
       });
 
       menu.appendChild(newNoteItem);
       menu.appendChild(deleteFolderItem);
     } else if (type === 'file') {
       const pageObj = data;
-      const deleteFileItem = document.createElement('div');
+      const pageKey = pageObj.name.toLowerCase();
+      const isPinned = this.pinnedNotes.has(pageKey);
+
+      const pinFileItem = document.createElement('button');
+      pinFileItem.type = 'button';
+      pinFileItem.className = 'context-menu-item';
+      pinFileItem.setAttribute('role', 'menuitem');
+      pinFileItem.innerHTML = isPinned
+        ? `<svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" stroke="currentColor" stroke-width="2" style="margin-right: 4.5px;">
+             <path d="M16 12V4c0-1.1-.9-2-2-2h-4c-1.1 0-2 .9-2 2v8l-2 2v2h14v-2l-2-2zM12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2z"/>
+           </svg>
+           Unpin Note`
+        : `<svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4.5px;">
+             <path d="M16 12V4c0-1.1-.9-2-2-2h-4c-1.1 0-2 .9-2 2v8l-2 2v2h14v-2l-2-2zM12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2z"/>
+           </svg>
+           Pin Note`;
+      pinFileItem.addEventListener('click', () => {
+        menu.style.display = 'none';
+        this.togglePinNote(pageObj.name);
+        if (this.contextMenuTrigger) this.contextMenuTrigger.focus();
+      });
+
+      const deleteFileItem = document.createElement('button');
+      deleteFileItem.type = 'button';
       deleteFileItem.className = 'context-menu-item danger';
+      deleteFileItem.setAttribute('role', 'menuitem');
       deleteFileItem.innerHTML = `
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+        <svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
           <polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
         </svg>
         Delete Note
@@ -3154,8 +3567,33 @@ class NativeNodesApp {
       deleteFileItem.addEventListener('click', () => {
         menu.style.display = 'none';
         this.deletePage(pageObj);
+        if (this.contextMenuTrigger) this.contextMenuTrigger.focus();
       });
 
+      const copyLinkItem = document.createElement('button');
+      copyLinkItem.type = 'button';
+      copyLinkItem.className = 'context-menu-item';
+      copyLinkItem.setAttribute('role', 'menuitem');
+      copyLinkItem.innerHTML = `
+        <svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+        </svg>
+        Copy Link
+      `;
+      copyLinkItem.addEventListener('click', async () => {
+        menu.style.display = 'none';
+        const linkText = pageObj.isImage ? `![[${pageObj.name}]]` : `[[${pageObj.name}]]`;
+        try {
+          await navigator.clipboard.writeText(linkText);
+        } catch (err) {
+          console.error('Failed to copy link:', err);
+        }
+        if (this.contextMenuTrigger) this.contextMenuTrigger.focus();
+      });
+
+      menu.appendChild(pinFileItem);
+      menu.appendChild(copyLinkItem);
       menu.appendChild(deleteFileItem);
     }
 
@@ -3175,15 +3613,13 @@ class NativeNodesApp {
     
     menu.style.left = `${x}px`;
     menu.style.top = `${y}px`;
+
+    // Focus first option to support keyboard interaction immediately
+    const firstItem = menu.querySelector('.context-menu-item');
+    if (firstItem) firstItem.focus();
   }
 
-  promptNewNoteInFolder(folderPath) {
-    const pageName = prompt(`Enter new note name to create in "${folderPath}":`);
-    if (pageName && pageName.trim()) {
-      const cleanName = pageName.trim();
-      this.createNewPage(`${folderPath}/${cleanName}`);
-    }
-  }
+
 
   _removePageFromIndex(pageName) {
     const parts = pageName.toLowerCase().split('/');
