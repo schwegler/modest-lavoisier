@@ -4,6 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Native Nodes - Local Markdown Wiki Workspace</title>
+  <meta name="color-scheme" content="light dark">
+  <script>
+    try {
+      const theme = localStorage.getItem('theme') || 'system';
+      if (theme && theme !== 'system') {
+        document.documentElement.setAttribute('data-theme', theme);
+      }
+    } catch (e) {}
+  </script>
   
   <!-- PWA Headers -->
   <link rel="manifest" href="manifest.json">
@@ -17,24 +26,34 @@
 </head>
 <body>
 
+  <!-- Keyboard Accessibility Skip Link -->
+  <a href="#workspacePanels" class="skip-link">Skip to main content</a>
+
   <!-- App Main Frame (hidden initially, shown when workspace loaded) -->
   <div id="appShell" class="app-container" style="display: none;">
     <!-- Sidebar -->
-    <aside id="sidebar" class="sidebar glass">
+    <aside id="sidebar" class="sidebar glass" aria-label="Sidebar Workspace">
       <div class="sidebar-header" data-tauri-drag-region>
-      </div>
-
-      <div class="sidebar-controls">
-        <div class="search-box">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <div class="search-box" style="width: 100%;">
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="11" cy="11" r="8"></circle>
             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
           </svg>
-          <input type="text" id="searchInput" placeholder="Search pages... (Cmd+F)">
+          <input type="text" id="searchInput" placeholder="Search pages... (Cmd+F)" aria-label="Search pages">
         </div>
       </div>
 
       <div class="sidebar-scroll">
+        <!-- Pinned Section -->
+        <div id="pinnedSection" style="display: none;">
+          <div class="section-label">
+            <span>Pinned</span>
+          </div>
+          <ul id="pinnedList" class="file-list" style="margin-bottom: 16px;">
+            <!-- Populated by JS -->
+          </ul>
+        </div>
+
         <div class="section-label">
           <span style="display: flex; align-items: center; gap: 8px;">
             Articles
@@ -44,14 +63,14 @@
             </span>
           </span>
           <div style="display: flex; gap: 6px; align-items: center;">
-            <button id="sidebarCollapseAllBtn" class="new-note-btn" title="Collapse all folders">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <button id="sidebarCollapseAllBtn" class="new-note-btn" title="Collapse all folders" aria-label="Collapse all folders">
+              <svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="17 11 12 6 7 11"></polyline>
                 <polyline points="17 18 12 13 7 18"></polyline>
               </svg>
             </button>
-            <button id="sidebarNewBtn" class="new-note-btn" title="Create new article (Cmd+N)">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <button id="sidebarNewBtn" class="new-note-btn" title="Create new article (Cmd+N)" aria-label="Create new article">
+              <svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <line x1="12" y1="5" x2="12" y2="19"></line>
                 <line x1="5" y1="12" x2="19" y2="12"></line>
               </svg>
@@ -76,7 +95,7 @@
           <span id="activeWorkspaceName" class="workspace-path">None</span>
         </div>
         <button id="changeWorkspaceBtn" class="btn-secondary">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
           </svg>
           Switch Folder
@@ -89,8 +108,8 @@
       <!-- Header -->
       <header class="main-header glass" data-tauri-drag-region>
         <div class="header-left">
-          <button id="menuToggleBtn" class="menu-toggle-btn" title="Toggle Sidebar">
-            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <button id="menuToggleBtn" class="menu-toggle-btn" title="Toggle Sidebar" aria-label="Toggle Sidebar">
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <line x1="3" y1="12" x2="21" y2="12"></line>
               <line x1="3" y1="6" x2="21" y2="6"></line>
               <line x1="3" y1="18" x2="21" y2="18"></line>
@@ -103,7 +122,7 @@
               <input type="text" id="activeNoteTitleInput" style="display: none;" class="title-input">
             </div>
             <div id="saveStatus" class="save-indicator saved">
-              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <svg aria-hidden="true" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="20 6 9 17 4 12"></polyline>
               </svg>
               <span>Saved</span>
@@ -113,16 +132,16 @@
 
         <div class="header-right">
           <!-- Layout Toggle -->
-          <button id="layoutToggleBtn" class="icon-btn active" title="Toggle Edit / Preview (Alt+L)">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <button id="layoutToggleBtn" class="icon-btn active" title="Toggle Edit / Preview (Alt+L)" aria-label="Toggle Edit or Preview View">
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
               <circle cx="12" cy="12" r="3"></circle>
             </svg>
           </button>
 
           <!-- View Graph Overlay Toggle -->
-          <button id="toggleGraphBtn" class="icon-btn active" title="Toggle Connection Graph (Cmd+G)">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <button id="toggleGraphBtn" class="icon-btn active" title="Toggle Connection Graph (Cmd+G)" aria-label="Toggle Connections Map">
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <line x1="18" y1="20" x2="18" y2="16"></line>
               <line x1="12" y1="20" x2="12" y2="12"></line>
               <line x1="6" y1="20" x2="6" y2="8"></line>
@@ -130,8 +149,8 @@
           </button>
 
           <!-- Export Option -->
-          <button id="exportHtmlBtn" class="icon-btn" title="Print / Export Page (Cmd+P)">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <button id="exportHtmlBtn" class="icon-btn" title="Print / Export Page (Cmd+P)" aria-label="Print or Export Note to PDF/HTML">
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="6 9 6 2 18 2 18 9"></polyline>
               <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
               <rect x="6" y="14" width="12" height="8"></rect>
@@ -139,8 +158,8 @@
           </button>
 
           <!-- Help Shortcuts -->
-          <button id="helpModalBtn" class="icon-btn" title="Keyboard Shortcuts">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <button id="helpModalBtn" class="icon-btn" title="Keyboard Shortcuts" aria-label="View Keyboard Shortcuts">
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="10"></circle>
               <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
               <line x1="12" y1="17" x2="12.01" y2="17"></line>
@@ -149,13 +168,13 @@
 
           <!-- Dropdown Theme Picker -->
           <div class="dropdown">
-            <button id="themePickerBtn" class="icon-btn" title="Select Theme">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <button id="themePickerBtn" class="icon-btn" title="Select Theme" aria-label="Select Color Theme" aria-haspopup="listbox" aria-expanded="false">
+              <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="10"></circle>
                 <path d="M12 2v20M12 12h10M12 12L5 5M12 12L5 19"></path>
               </svg>
             </button>
-            <div id="themeDropdownMenu" class="dropdown-menu glass" style="display: none;">
+            <div id="themeDropdownMenu" class="dropdown-menu glass" style="display: none;" role="listbox" aria-label="Theme Options">
               <!-- Populated by JS -->
             </div>
           </div>
@@ -194,7 +213,7 @@
                 <div id="tagEditorContainer" class="tag-editor-container">
                   <div id="tagPillsList" class="tag-pills-list"></div>
                   <div class="tag-input-wrapper">
-                    <input type="text" id="tagInputField" placeholder="Add tag..." autocomplete="off">
+                    <input type="text" id="tagInputField" placeholder="Add tag..." autocomplete="off" aria-label="Add tag">
                     <div id="tagAutocompleteDropdown" class="tag-autocomplete-dropdown" style="display: none;"></div>
                   </div>
                 </div>
@@ -433,11 +452,11 @@
 
   <!-- Dialog Modals -->
   <!-- 1. New Page Modal -->
-  <dialog id="newNoteModal" class="modal glass">
+  <dialog id="newNoteModal" class="modal glass" aria-labelledby="newNoteModalTitle">
     <div class="modal-header">
-      <h3>Create New Page</h3>
-      <button class="modal-close-btn" data-close>
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <h3 id="newNoteModalTitle">Create New Page</h3>
+      <button class="modal-close-btn" data-close aria-label="Close dialog">
+        <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="18" y1="6" x2="6" y2="18"></line>
           <line x1="6" y1="6" x2="18" y2="18"></line>
         </svg>
@@ -458,11 +477,11 @@
   </dialog>
 
   <!-- 2. Help Shortcuts Modal -->
-  <dialog id="helpModal" class="modal glass">
+  <dialog id="helpModal" class="modal glass" aria-labelledby="helpModalTitle">
     <div class="modal-header">
-      <h3>Native Nodes Keyboard Shortcuts</h3>
-      <button class="modal-close-btn" data-close>
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <h3 id="helpModalTitle">Native Nodes Keyboard Shortcuts</h3>
+      <button class="modal-close-btn" data-close aria-label="Close dialog">
+        <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="18" y1="6" x2="6" y2="18"></line>
           <line x1="6" y1="6" x2="18" y2="18"></line>
         </svg>

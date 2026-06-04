@@ -438,16 +438,21 @@ export class WikiGraph {
     this.ctx.translate(this.panX, this.panY);
     this.ctx.scale(this.zoom, this.zoom);
 
-    // Styling constants
-    const accentColor = '#6366f1'; // Premium Indigo
-    const accentGlow = 'rgba(99, 102, 241, 0.25)';
-    const brokenColor = '#ef4444'; // Red-orange for missing notes
-    const brokenGlow = 'rgba(239, 68, 68, 0.2)';
+    // Styling constants dynamically read from CSS variables
+    const style = getComputedStyle(document.documentElement);
+    const accentColor = style.getPropertyValue('--accent').trim() || '#6366f1';
+    const brokenColor = style.getPropertyValue('--broken-link').trim() || '#ef4444';
+    const textColor = style.getPropertyValue('--text').trim() || (this.isDark ? '#f1f5f9' : '#0f172a');
+    const textMutedColor = style.getPropertyValue('--text-muted').trim() || (this.isDark ? '#94a3b8' : '#64748b');
+    const borderVal = style.getPropertyValue('--border').trim() || (this.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)');
 
-    const lineColorDefault = this.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)';
-    const lineColorActive = this.isDark ? 'rgba(99, 102, 241, 0.45)' : 'rgba(99, 102, 241, 0.35)';
-    const nodeColorDefault = this.isDark ? '#334155' : '#cbd5e1';
-    const nodeColorText = this.isDark ? '#e2e8f0' : '#1e293b';
+    const accentGlow = style.getPropertyValue('--accent-glow').trim() || 'rgba(99, 102, 241, 0.25)';
+    const brokenGlow = style.getPropertyValue('--broken-bg').trim() || 'rgba(239, 68, 68, 0.2)';
+
+    const lineColorDefault = borderVal;
+    const lineColorActive = accentColor;
+    const nodeColorDefault = textMutedColor;
+    const nodeColorText = textColor;
 
     // 1. Draw connections/links
     this.ctx.lineWidth = 1.5;
