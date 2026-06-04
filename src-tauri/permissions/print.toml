@@ -2,3 +2,8 @@
 identifier = "allow-print-page"
 description = "Allows invoking the print_page command"
 commands.allow = ["print_page"]
+
+[[permission]]
+identifier = "allow-open-external-url"
+description = "Allows invoking the open_external_url command"
+commands.allow = ["open_external_url"]

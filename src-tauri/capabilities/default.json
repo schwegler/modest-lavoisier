@@ -17,6 +17,7 @@
     "fs:allow-write-file",
     "fs:allow-rename",
     "fs:allow-remove",
+    "allow-open-external-url",
     "allow-print-page",
     "core:webview:allow-print"
   ]

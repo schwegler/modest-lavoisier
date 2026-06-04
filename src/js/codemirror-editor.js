@@ -22,6 +22,17 @@ function getWikiLinkDecoration(pageName) {
   });
 }
 
+// Styles to apply to external URL link labels
+function getExternalLinkDecoration(url) {
+  return Decoration.mark({
+    attributes: {
+      class: 'cm-live-link cm-external-link',
+      'data-href': url,
+      title: `Cmd/Ctrl+Click to open ${url}`
+    }
+  });
+}
+
 function resolveImageUrl(target) {
   if (!target) return '';
   if (/^(https?:|data:|blob:)/i.test(target)) {
@@ -357,18 +368,40 @@ const livePreviewPlugin = ViewPlugin.fromClass(class {
           // 5. Standard Link (e.g. [label](url))
           else if (type === 'Link') {
             if (!cursorIntersects(node.from, node.to)) {
+              // Extract the URL from the link node
+              let linkUrl = '';
+              let urlChild = node.node.firstChild;
+              while (urlChild) {
+                if (urlChild.name === 'URL') {
+                  linkUrl = view.state.sliceDoc(urlChild.from, urlChild.to);
+                }
+                urlChild = urlChild.nextSibling;
+              }
+
+              // Find label range (text between [ and ])
+              let labelFrom = -1;
+              let labelTo = -1;
               let child = node.node.firstChild;
               while (child) {
                 if (child.name === 'LinkMark') {
                   const text = view.state.sliceDoc(child.from, child.to);
-                  if (text === '[' || text === ']') {
+                  if (text === '[') {
                     builder.push(hiddenMarkerDecoration.range(child.from, child.to));
+                    labelFrom = child.to;
+                  } else if (text === ']') {
+                    builder.push(hiddenMarkerDecoration.range(child.from, child.to));
+                    labelTo = child.from;
                   } else if (text === '(') {
                     // Hide the entire (...) block (including URL and close parenthesis)
                     builder.push(hiddenMarkerDecoration.range(child.from, node.to));
                   }
                 }
                 child = child.nextSibling;
+              }
+
+              // Apply external link decoration to the label if URL is external
+              if (linkUrl && /^https?:\/\//i.test(linkUrl) && labelFrom >= 0 && labelTo > labelFrom) {
+                builder.push(getExternalLinkDecoration(linkUrl).range(labelFrom, labelTo));
               }
             }
           }
@@ -582,9 +615,24 @@ export class CodeMirrorEditor {
             const target = event.target;
             if (target && target.classList.contains('cm-live-link')) {
               const isCmdOrCtrl = event.metaKey || event.ctrlKey;
-              if (isCmdOrCtrl && this.onWikiLinkClick) {
+              if (isCmdOrCtrl) {
+                // Handle external links (data-href attribute)
+                const externalUrl = target.getAttribute('data-href');
+                if (externalUrl) {
+                  event.preventDefault();
+                  if (window.__TAURI__ && window.__TAURI__.core) {
+                    window.__TAURI__.core.invoke('open_external_url', { url: externalUrl }).catch(err => {
+                      console.error('Failed to open external link:', err);
+                      window.open(externalUrl, '_blank');
+                    });
+                  } else {
+                    window.open(externalUrl, '_blank');
+                  }
+                  return true;
+                }
+                // Handle wiki links (data-page attribute)
                 const pageTarget = target.getAttribute('data-page');
-                if (pageTarget) {
+                if (pageTarget && this.onWikiLinkClick) {
                   event.preventDefault();
                   this.onWikiLinkClick(pageTarget);
                   return true;

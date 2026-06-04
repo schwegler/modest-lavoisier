@@ -846,6 +846,24 @@ class NativeNodesApp {
     // Hash Router Listener
     window.addEventListener('hashchange', () => this.handleRouting());
 
+    // Intercept clicks on external links and open them in default system browser in Tauri
+    document.addEventListener('click', (e) => {
+      const anchor = e.target.closest('a');
+      if (!anchor) return;
+      const href = anchor.getAttribute('href');
+      if (href && (href.startsWith('http://') || href.startsWith('https://'))) {
+        e.preventDefault();
+        if (this.isTauri) {
+          window.__TAURI__.core.invoke('open_external_url', { url: href }).catch(err => {
+            console.error('Failed to open external link:', err);
+            window.open(href, '_blank');
+          });
+        } else {
+          window.open(href, '_blank');
+        }
+      }
+    });
+
     // Init tag input listeners
     this.setupTagEditor();
   }

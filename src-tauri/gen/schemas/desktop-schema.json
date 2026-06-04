@@ -2001,6 +2001,12 @@
       "description": "Permission identifier",
       "oneOf": [
         {
+          "description": "Allows invoking the open_external_url command",
+          "type": "string",
+          "const": "allow-open-external-url",
+          "markdownDescription": "Allows invoking the open_external_url command"
+        },
+        {
           "description": "Allows invoking the print_page command",
           "type": "string",
           "const": "allow-print-page",
