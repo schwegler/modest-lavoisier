@@ -2326,28 +2326,36 @@ class NativeNodesApp {
    * Resolves a typed wiki-link target to the actual workspace page cased name
    * using flat lookup or exact match.
    */
-  resolveWikiLink(targetName) {
+  resolveWikiLink(targetName, cache = null) {
     const key = targetName.toLowerCase();
-    if (this.pages.has(key)) {
-      return this.pages.get(key).name; // Exact match
+
+    if (cache && cache.has(key)) {
+      return cache.get(key);
     }
 
-    if (this.pageNamesIndex.has(key)) {
+    let result = targetName;
+    if (this.pages.has(key)) {
+      result = this.pages.get(key).name; // Exact match
+    } else if (this.pageNamesIndex.has(key)) {
       const matches = this.pageNamesIndex.get(key);
       if (matches && matches.length > 0) {
-        return matches[0].name; // Flat suffix match
+        result = matches[0].name; // Flat suffix match
+      }
+    } else {
+      // Fallback for multi-segment suffix matching (e.g. [[sub/page]] -> archive/sub/page)
+      const suffix = '/' + key;
+      for (const [existingKey, page] of this.pages.entries()) {
+        if (existingKey.endsWith(suffix)) {
+          result = page.name;
+          break;
+        }
       }
     }
 
-    // Fallback for multi-segment suffix matching (e.g. [[sub/page]] -> archive/sub/page)
-    const suffix = '/' + key;
-    for (const [existingKey, page] of this.pages.entries()) {
-      if (existingKey.endsWith(suffix)) {
-        return page.name;
-      }
+    if (cache) {
+      cache.set(key, result);
     }
-
-    return targetName; // Not found, keep as is
+    return result; // Not found, keep as is or resolved
   }
 
   /**
@@ -2364,10 +2372,11 @@ class NativeNodesApp {
 
     // 2. Gather non-existent page links that are referenced
     const referenced = new Set();
+    const cache = new Map();
     for (const page of this.pages.values()) {
       const extracted = extractWikiLinks(page.content);
       for (const target of extracted) {
-        const resolvedName = this.resolveWikiLink(target);
+        const resolvedName = this.resolveWikiLink(target, cache);
         const key = resolvedName.toLowerCase();
         if (!existing.has(key)) {
           referenced.add(resolvedName);
@@ -2387,10 +2396,11 @@ class NativeNodesApp {
    */
   getGraphLinks() {
     const links = [];
+    const cache = new Map();
     for (const page of this.pages.values()) {
       const extracted = extractWikiLinks(page.content);
       for (const target of extracted) {
-        const resolvedName = this.resolveWikiLink(target);
+        const resolvedName = this.resolveWikiLink(target, cache);
         links.push({
           source: page.name,
           target: resolvedName
