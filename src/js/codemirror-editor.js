@@ -178,6 +178,7 @@ class TableWidget extends WidgetType {
     }
 
     const tbody = document.createElement('tbody');
+    const fragment = document.createDocumentFragment();
     tableData.rows.forEach((row, rIdx) => {
       const tr = document.createElement('tr');
       row.forEach(cell => {
@@ -193,8 +194,9 @@ class TableWidget extends WidgetType {
         const td = document.createElement('td');
         tr.appendChild(td);
       }
-      tbody.appendChild(tr);
+      fragment.appendChild(tr);
     });
+    tbody.appendChild(fragment);
     table.appendChild(tbody);
     container.appendChild(table);
 
