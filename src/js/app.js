@@ -1331,8 +1331,8 @@ class NativeNodesApp {
 
       li.innerHTML = `
         ${iconHTML}
-        <span class="file-name" style="flex-grow: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(page.name)}</span>
-        <svg class="pinned-indicator-icon" viewBox="0 0 24 24" width="12" height="12" fill="currentColor" style="opacity: 0.6; flex-shrink: 0; margin-left: 6px;">
+        <span class="file-name">${escapeHTML(page.name)}</span>
+        <svg class="pinned-indicator-icon" viewBox="0 0 24 24" width="12" height="12" fill="currentColor">
           <path d="M16 12V4c0-1.1-.9-2-2-2h-4c-1.1 0-2 .9-2 2v8l-2 2v2h14v-2l-2-2zM12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2z"/>
         </svg>
       `;

@@ -2813,3 +2813,17 @@ dialog.modal::backdrop {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
+
+.file-name {
+  flex-grow: 1;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pinned-indicator-icon {
+  opacity: 0.6;
+  flex-shrink: 0;
+  margin-left: 6px;
+}
