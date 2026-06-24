@@ -7,6 +7,8 @@
 import { marked } from 'https://esm.sh/marked@12.0.0';
 import DOMPurify from 'https://esm.sh/dompurify@3.0.9';
 
+const WIKI_LINK_REGEX = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
+
 /**
  * Escapes HTML characters to prevent XSS in attributes.
  * @param {string} unsafe 
@@ -30,7 +32,8 @@ export function escapeHTML(unsafe) {
  */
 function preprocessWikiLinks(text) {
   if (!text) return '';
-  return text.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (match, targetPage, label) => {
+  WIKI_LINK_REGEX.lastIndex = 0;
+  return text.replace(WIKI_LINK_REGEX, (match, targetPage, label) => {
     const pageName = targetPage.trim();
     const finalLabel = (label || pageName).trim();
     return `[${finalLabel}](wikilink:${encodeURIComponent(pageName)})`;
@@ -207,14 +210,15 @@ export function extractWikiLinks(markdown) {
   if (!markdown) return [];
   const cleanMarkdown = stripFrontmatter(markdown);
   const links = new Set();
-  const regex = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
   let match;
-  while ((match = regex.exec(cleanMarkdown)) !== null) {
+  while ((match = WIKI_LINK_REGEX.exec(cleanMarkdown)) !== null) {
     const pageName = match[1].trim();
     if (pageName) {
       links.add(pageName);
     }
   }
+  // Reset the regex index because it has the 'g' flag and is shared globally
+  WIKI_LINK_REGEX.lastIndex = 0;
   return Array.from(links);
 }
 
