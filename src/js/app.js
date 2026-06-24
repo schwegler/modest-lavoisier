@@ -2966,7 +2966,7 @@ class NativeNodesApp {
       
     } catch (err) {
       alert('Failed to rename page file.');
-      console.error(err);
+      console.error('Failed to rename page file:', err);
       this.dom.activeNoteTitle.textContent = oldName;
     }
   }
