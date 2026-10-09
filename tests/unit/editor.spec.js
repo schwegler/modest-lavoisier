@@ -134,3 +134,57 @@ test.describe('parseFrontmatter', () => {
     });
   });
 });
+
+test.describe('stringifyFrontmatter', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('http://localhost:8080');
+  });
+
+  async function evaluateStringifyFrontmatter(page, tags, fields) {
+    return await page.evaluate(async ({ tags, fields }) => {
+      const { stringifyFrontmatter } = await new Function("return import('/js/editor.js')")();
+      return stringifyFrontmatter(tags, fields);
+    }, { tags, fields });
+  }
+
+  test('should stringify tags without fields', async ({ page }) => {
+    const result = await evaluateStringifyFrontmatter(page, ['javascript', 'testing'], null);
+    expect(result).toBe('---\ntags: [javascript, testing]\n---\n');
+  });
+
+  test('should stringify fields without tags', async ({ page }) => {
+    const result = await evaluateStringifyFrontmatter(page, null, { title: 'My Note', author: 'John Doe' });
+    expect(result).toBe('---\ntags: []\ntitle: My Note\nauthor: John Doe\n---\n');
+  });
+
+  test('should stringify both tags and fields', async ({ page }) => {
+    const result = await evaluateStringifyFrontmatter(page, ['tag1', 'tag2'], { title: 'My Note' });
+    expect(result).toBe('---\ntags: [tag1, tag2]\ntitle: My Note\n---\n');
+  });
+
+  test('should handle null/undefined inputs gracefully', async ({ page }) => {
+    const result1 = await evaluateStringifyFrontmatter(page, null, null);
+    expect(result1).toBe('---\ntags: []\n---\n');
+
+    const result2 = await evaluateStringifyFrontmatter(page, undefined, undefined);
+    expect(result2).toBe('---\ntags: []\n---\n');
+  });
+
+  test('should ignore tags key in fields object', async ({ page }) => {
+    const result = await evaluateStringifyFrontmatter(page, ['real-tag'], { title: 'My Note', tags: 'should-be-ignored' });
+    expect(result).toBe('---\ntags: [real-tag]\ntitle: My Note\n---\n');
+  });
+
+  test('should trim keys and values and ignore empty keys', async ({ page }) => {
+    const result = await evaluateStringifyFrontmatter(page, [], {
+      '  title  ': '  Spaced Title  ',
+      '   ': 'empty key value'
+    });
+    expect(result).toBe('---\ntags: []\ntitle: Spaced Title\n---\n');
+  });
+
+  test('should stringify non-string values', async ({ page }) => {
+    const result = await evaluateStringifyFrontmatter(page, [], { count: 42, isDraft: true });
+    expect(result).toBe('---\ntags: []\ncount: 42\nisDraft: true\n---\n');
+  });
+});
